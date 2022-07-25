@@ -2,10 +2,66 @@ import asyncio
 import sys
 from itertools import product
 
+from lxml import etree
 from rich.pretty import pprint
 
 import panorama_api
 import settings
+
+
+def run_xml(configstr):
+    config = etree.fromstring(configstr)
+
+    # Get Device Groups
+    if not settings.device_groups:
+        dgs = config.find(".//device-group")
+        for entry in dgs.getchildren():
+            settings.device_groups.append(entry.get("name"))
+
+    if settings.exclude_device_groups:
+        for dg in settings.exclude_device_groups:
+            settings.device_groups.remove(dg)
+
+    pprint(settings.device_groups)
+
+    for object_type in settings.to_dedupe:
+        results = get_duplicates_xml(config, object_type)
+
+        print("Duplicates found: \n")
+        pprint(results)
+
+def get_duplicates_xml(config, object_type):
+    my_objs = {}
+    for dg in settings.device_groups:
+        if object_type == "addresses":
+            objs = config.xpath(f"//device-group/entry[@name='{dg}']/address/entry")
+        if object_type == "address-groups":
+            objs = config.xpath(f"//device-group/entry[@name='{dg}']/address-group/entry")
+        if object_type == "services":
+            objs = config.xpath(f"//device-group/entry[@name='{dg}']/service/entry")
+        if object_type == "service-groups":
+            objs = config.xpath(f"//device-group/entry[@name='{dg}']/service-group/entry")
+
+        # print(f"printing {dg}: {object_type}")
+        # for obj in objs:
+        #     print(obj.get("name"))
+
+        if not objs:
+            print(f"No {object_type} found, moving on...")
+            return {object_type: []}
+
+        my_objs[dg] = set([name.get("name") for name in objs])
+
+    duplicates = find_duplicates(my_objs)
+
+    results = {}
+    results[object_type] = {}
+
+    for dupe, dgs in duplicates.items():
+        if len(dgs) >= settings.minimum_duplicates:
+            results[object_type].update({dupe:dgs})
+
+    return results
 
 
 async def run(panorama: str, username: str, password: str):
@@ -22,17 +78,17 @@ async def run(panorama: str, username: str, password: str):
         for dg in settings.exclude_device_groups:
             settings.device_groups.remove(dg)
 
-    print(f"Comparing these device groups:\n{settings.device_groups}")
-    print(f"and these object types:\n{settings.to_dedupe}")
+    print(f"Comparing these device groups:\n\t{settings.device_groups}")
+    print(f"and these object types:\n\t{settings.to_dedupe}")
 
-    coroutines = [list_duplicates(pa, object_type) for object_type in settings.to_dedupe]
+    coroutines = [get_duplicates(pa, object_type) for object_type in settings.to_dedupe]
     results = await asyncio.gather(*coroutines)
 
     print("Duplicates found: \n")
     pprint(results)
 
 
-async def list_duplicates(pa, object_type):
+async def get_duplicates(pa, object_type):
     my_objs = {}
     for dg in settings.device_groups:
         if object_type == "addresses":
@@ -49,24 +105,19 @@ async def list_duplicates(pa, object_type):
             return {object_type: []}
         my_objs[dg] = set([name["@name"] for name in objs])
 
-    duplicates = compare_objects(my_objs)
-
-    # print(f"\n\nDuplicate {object_type} found: [device-group names]:")
-    # pprint(duplicates)
+    duplicates = find_duplicates(my_objs)
 
     results = {}
-    results.setdefault(object_type, {})
+    results[object_type] = {}
 
     for dupe, dgs in duplicates.items():
         if len(dgs) >= settings.minimum_duplicates:
-            #print(f"{dupe} equals or exceeds limit of {settings.minimum_duplicates} device group overlap!")
             results[object_type].update({dupe:dgs})
-            #print(results)
 
     return results
 
 
-def compare_objects(my_objects):
+def find_duplicates(my_objects):
     duplicates = {}
     for items in product(my_objects, repeat=2):
         if items[0] == items[1]:

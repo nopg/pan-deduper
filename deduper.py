@@ -4,7 +4,6 @@ import sys
 from typing import Optional
 
 import typer
-from lxml import etree
 
 import utils
 
@@ -16,7 +15,7 @@ app = typer.Typer(
 
 
 @app.command("xml", help="Gather objects/services via XML")
-def xml(filename: Optional[str] = typer.Option(default=None, prompt="XML FIlename: ")):
+def xml(filename: Optional[str] = typer.Option(None, "--filename", "-f", prompt="XML FIlename: ")):
     print("XML Time!")
 
     try:
@@ -27,11 +26,7 @@ def xml(filename: Optional[str] = typer.Option(default=None, prompt="XML FIlenam
         print("\nFile open failed...typo?\n")
         sys.exit(1)
 
-    config = etree.fromstring(configstr)
-
-    print(config)
-
-    print(config.find(".//entry"))
+    utils.run_xml(configstr)
 
 
 @app.command("panorama", help="Gather objects/services via Panorama")
