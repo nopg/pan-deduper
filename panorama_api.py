@@ -96,7 +96,6 @@ class Panorama_api:
         if int(response.get("result").get("@count")) > 0:
             return response["result"]["entry"]
         else:
-            print("No Address Objects found")
             return None
 
     async def get_address_groups(self, device_group: str):
@@ -105,7 +104,6 @@ class Panorama_api:
         if int(response.get("result").get("@count")) > 0:
             return response["result"]["entry"]
         else:
-            print("No Address Groups found")
             return None
 
     async def get_service_objects(self, device_group: str):
@@ -114,7 +112,6 @@ class Panorama_api:
         if int(response.get("result").get("@count")) > 0:
             return response["result"]["entry"]
         else:
-            print("No Service Objects found")
             return None
 
     async def get_service_groups(self, device_group: str):
@@ -123,5 +120,4 @@ class Panorama_api:
         if int(response.get("result").get("@count")) > 0:
             return response["result"]["entry"]
         else:
-            print("No Service Groups found")
             return None
