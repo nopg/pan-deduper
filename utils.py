@@ -24,11 +24,12 @@ def run_xml(configstr):
 
     pprint(settings.device_groups)
 
+    results = []
     for object_type in settings.to_dedupe:
-        results = get_duplicates_xml(config, object_type)
+        results.append(get_duplicates_xml(config, object_type))
 
-        print("Duplicates found: \n")
-        pprint(results)
+    print("Duplicates found: \n")
+    pprint(results)
 
 def get_duplicates_xml(config, object_type):
     my_objs = {}
@@ -41,10 +42,6 @@ def get_duplicates_xml(config, object_type):
             objs = config.xpath(f"//device-group/entry[@name='{dg}']/service/entry")
         if object_type == "service-groups":
             objs = config.xpath(f"//device-group/entry[@name='{dg}']/service-group/entry")
-
-        # print(f"printing {dg}: {object_type}")
-        # for obj in objs:
-        #     print(obj.get("name"))
 
         if not objs:
             print(f"No {object_type} found, moving on...")
