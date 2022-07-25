@@ -15,7 +15,11 @@ app = typer.Typer(
 
 
 @app.command("xml", help="Gather objects/services via XML")
-def xml(filename: Optional[str] = typer.Option(None, "--filename", "-f", prompt="XML FIlename: ")):
+def xml(
+    filename: Optional[str] = typer.Option(
+        None, "--filename", "-f", prompt="XML FIlename: "
+    )
+):
     print("XML Time!")
 
     try:

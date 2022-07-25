@@ -85,7 +85,9 @@ class Panorama_api:
     async def get_device_groups(self):
         response = await self.get_request(url="Panorama/DeviceGroups")
         if int(response.get("result").get("@count")) > 0:
-            return [name["@name"] for name in response["result"]["entry"]]  # Just return list of names
+            return [
+                name["@name"] for name in response["result"]["entry"]
+            ]  # Just return list of names
         else:
             print("No Device Groups found..whatchu doing?")
             sys.exit(1)

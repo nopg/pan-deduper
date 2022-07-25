@@ -14,7 +14,7 @@ def run_xml(configstr):
 
     # Get Device Groups
     if not settings.device_groups:
-        dgs = config.find(".//device-group")
+        dgs = config.find("devices/entry[@name='localhost.localdomain']/device-group")
         for entry in dgs.getchildren():
             settings.device_groups.append(entry.get("name"))
 
@@ -31,17 +31,26 @@ def run_xml(configstr):
     print("Duplicates found: \n")
     pprint(results)
 
+
 def get_duplicates_xml(config, object_type):
     my_objs = {}
     for dg in settings.device_groups:
         if object_type == "addresses":
-            objs = config.xpath(f"//device-group/entry[@name='{dg}']/address/entry")
+            objs = config.xpath(
+                f"//devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/address/entry"
+            )
         if object_type == "address-groups":
-            objs = config.xpath(f"//device-group/entry[@name='{dg}']/address-group/entry")
+            objs = config.xpath(
+                f"//devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/address-group/entry"
+            )
         if object_type == "services":
-            objs = config.xpath(f"//device-group/entry[@name='{dg}']/service/entry")
+            objs = config.xpath(
+                f"//devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/service/entry"
+            )
         if object_type == "service-groups":
-            objs = config.xpath(f"//device-group/entry[@name='{dg}']/service-group/entry")
+            objs = config.xpath(
+                f"//devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/service-group/entry"
+            )
 
         if not objs:
             print(f"No {object_type} found, moving on...")
@@ -56,7 +65,7 @@ def get_duplicates_xml(config, object_type):
 
     for dupe, dgs in duplicates.items():
         if len(dgs) >= settings.minimum_duplicates:
-            results[object_type].update({dupe:dgs})
+            results[object_type].update({dupe: dgs})
 
     return results
 
@@ -109,7 +118,7 @@ async def get_duplicates(pa, object_type):
 
     for dupe, dgs in duplicates.items():
         if len(dgs) >= settings.minimum_duplicates:
-            results[object_type].update({dupe:dgs})
+            results[object_type].update({dupe: dgs})
 
     return results
 
