@@ -14,6 +14,7 @@ To use:
 #### Examples:
 Connect to Panorama:
 `deduper panorama -i 10.10.1.1 -u admin -p admin`
+
 Grab objects from .xml file:
 `deduper xml -f filename.xml`
 
