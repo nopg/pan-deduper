@@ -11,4 +11,4 @@ to_dedupe = [
     "address-groups",
     "services",
     "service-groups",
-]   # List of objects to search through (Available: "addresses", "address-groups", "services", "service-groups")
+]  # List of objects to search through (Available: "addresses", "address-groups", "services", "service-groups")

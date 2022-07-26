@@ -5,8 +5,8 @@ from itertools import combinations
 from lxml import etree
 from rich.pretty import pprint
 
-from panorama_api import Panorama_api
 import settings
+from panorama_api import Panorama_api
 
 
 def get_objects_xml(config, object_type):
@@ -77,10 +77,12 @@ def find_duplicates(my_objects):
     return duplicates
 
 
-async def set_device_groups(*, config = None, pan: Panorama_api = None):
+async def set_device_groups(*, config=None, pan: Panorama_api = None):
     if config:
         if not settings.device_groups:
-            dgs = config.find("devices/entry[@name='localhost.localdomain']/device-group")
+            dgs = config.find(
+                "devices/entry[@name='localhost.localdomain']/device-group"
+            )
             for entry in dgs.getchildren():
                 settings.device_groups.append(entry.get("name"))
     else:
@@ -95,7 +97,13 @@ async def set_device_groups(*, config = None, pan: Panorama_api = None):
     print(f"and these object types:\n\t{settings.to_dedupe}")
 
 
-async def run(*, configstr: str = None, panorama: str = None, username: str = None, password: str = None):
+async def run(
+    *,
+    configstr: str = None,
+    panorama: str = None,
+    username: str = None,
+    password: str = None,
+):
     """
     Main program
 
@@ -108,21 +116,23 @@ async def run(*, configstr: str = None, panorama: str = None, username: str = No
     if configstr:
         config = etree.fromstring(configstr)
         await set_device_groups(config=config)
-        my_objs = [get_objects_xml(config, object_type) for object_type in settings.to_dedupe]
+        my_objs = [
+            get_objects_xml(config, object_type) for object_type in settings.to_dedupe
+        ]
 
     else:
-        pan = Panorama_api(
-            panorama=panorama, username=username, password=password
-        )
+        pan = Panorama_api(panorama=panorama, username=username, password=password)
         await pan.login()
         await set_device_groups(pan=pan)
-        coroutines = [get_objects(pan, object_type) for object_type in settings.to_dedupe]
+        coroutines = [
+            get_objects(pan, object_type) for object_type in settings.to_dedupe
+        ]
         my_objs = await asyncio.gather(*coroutines)
 
     # Fix the black magic
     results = {}
     for object_type in my_objs:
-        key, = object_type.keys()
+        (key,) = object_type.keys()
         duplicates = find_duplicates(object_type[key])
         results[key] = {}
 
@@ -132,4 +142,3 @@ async def run(*, configstr: str = None, panorama: str = None, username: str = No
 
     print("Duplicates found: \n")
     pprint(results)
-
