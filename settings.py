@@ -1,7 +1,7 @@
 """
 Variables to be updated by end-user on each run
 """
-push_to_pa = False  # Duh
+push_to_panorama = False  # Duh
 device_groups = []  # Leave empty if searching ALL device groups
 exclude_device_groups = ["global"]  # Leave empty if searching ALL device groups
 parent_device_group = ["global"]  # Where should we move the duplicate objects?
@@ -11,4 +11,4 @@ to_dedupe = [
     "address-groups",
     "services",
     "service-groups",
-]
+]   # List of objects to search through (Available: "addresses", "address-groups", "services", "service-groups")

@@ -1,4 +1,3 @@
-# import api_lib_pa as pa
 import asyncio
 import sys
 from typing import Optional
@@ -30,7 +29,7 @@ def xml(
         print("\nFile open failed...typo?\n")
         sys.exit(1)
 
-    utils.run_xml(configstr)
+    asyncio.run(utils.run(configstr=configstr))
 
 
 @app.command("panorama", help="Gather objects/services via Panorama")
