@@ -9,9 +9,10 @@ from panorama_api import Panorama_api
 import settings
 
 
-async def get_duplicates_xml(config, object_type):
+def get_objects_xml(config, object_type):
     my_objs = {}
     for dg in settings.device_groups:
+        objs = None
         if object_type == "addresses":
             objs = config.xpath(
                 f"//devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/address/entry"
@@ -35,20 +36,13 @@ async def get_duplicates_xml(config, object_type):
 
         my_objs[dg] = set([name.get("name") for name in objs])
 
-    duplicates = find_duplicates(my_objs)
+    return {object_type: my_objs}
 
-    results = {}
-    results[object_type] = {}
 
-    for dupe, dgs in duplicates.items():
-        if len(dgs) >= settings.minimum_duplicates:
-            results[object_type].update({dupe: dgs})
-
-    return results
-
-async def get_duplicates(pa, object_type):
+async def get_objects(pa, object_type):
     my_objs = {}
     for dg in settings.device_groups:
+        objs = None
         if object_type == "addresses":
             objs = await pa.get_address_objects(device_group=dg)
         if object_type == "address-groups":
@@ -63,16 +57,7 @@ async def get_duplicates(pa, object_type):
             return {object_type: []}
         my_objs[dg] = set([name["@name"] for name in objs])
 
-    duplicates = find_duplicates(my_objs)
-
-    results = {}
-    results[object_type] = {}
-
-    for dupe, dgs in duplicates.items():
-        if len(dgs) >= settings.minimum_duplicates:
-            results[object_type].update({dupe: dgs})
-
-    return results
+    return {object_type: my_objs}
 
 
 def find_duplicates(my_objects):
@@ -111,10 +96,19 @@ async def set_device_groups(*, config = None, pan: Panorama_api = None):
 
 
 async def run(*, configstr: str = None, panorama: str = None, username: str = None, password: str = None):
+    """
+    Main program
+
+    :param configstr:
+    :param panorama:
+    :param username:
+    :param password:
+    :return:
+    """
     if configstr:
         config = etree.fromstring(configstr)
         await set_device_groups(config=config)
-        coroutines = [get_duplicates_xml(config, object_type) for object_type in settings.to_dedupe]
+        my_objs = [get_objects_xml(config, object_type) for object_type in settings.to_dedupe]
 
     else:
         pan = Panorama_api(
@@ -122,9 +116,19 @@ async def run(*, configstr: str = None, panorama: str = None, username: str = No
         )
         await pan.login()
         await set_device_groups(pan=pan)
-        coroutines = [get_duplicates(pan, object_type) for object_type in settings.to_dedupe]
+        coroutines = [get_objects(pan, object_type) for object_type in settings.to_dedupe]
+        my_objs = await asyncio.gather(*coroutines)
 
-    results = await asyncio.gather(*coroutines)
+    # Fix the black magic
+    results = {}
+    for object_type in my_objs:
+        key, = object_type.keys()
+        duplicates = find_duplicates(object_type[key])
+        results[key] = {}
+
+        for dupe, dgs in duplicates.items():
+            if len(dgs) >= settings.minimum_duplicates:
+                results[key].update({dupe: dgs})
 
     print("Duplicates found: \n")
     pprint(results)
