@@ -4,7 +4,7 @@ from typing import Optional
 
 import typer
 
-import utils
+import pan_deduper.utils as utils
 
 app = typer.Typer(
     name="deduper",

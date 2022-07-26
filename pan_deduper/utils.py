@@ -6,8 +6,8 @@ from itertools import combinations
 from lxml import etree
 from rich.pretty import pprint
 
-import settings
-from panorama_api import Panorama_api
+import pan_deduper.settings as settings
+from pan_deduper.panorama_api import Panorama_api
 
 # Logging setup:
 logger = logging.getLogger("utils")
