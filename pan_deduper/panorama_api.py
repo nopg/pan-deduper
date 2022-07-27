@@ -164,7 +164,7 @@ class Panorama_api:
             print("No Device Groups found..whatchu doing?")
             sys.exit(1)
 
-    async def get_objects(self, object_type: str, device_group: str, params: Dict = None):
+    async def get_objects(self, object_type: str, device_group: str = None, params: Dict = None):
         """
         Get Objects from API
 

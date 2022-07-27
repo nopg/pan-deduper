@@ -1,6 +1,6 @@
 import asyncio
-import importlib
 import importlib.resources as pkg_resources
+import importlib.util
 import json
 import logging
 import sys
@@ -26,8 +26,12 @@ logger.addHandler(file_handler)
 
 # Import 'settings' at runtime
 try:
-    settings = importlib.import_module("settings")
-except (ImportError, ModuleNotFoundError):
+    spec = importlib.util.spec_from_file_location("settings", "./settings.py")
+    settings = importlib.util.module_from_spec(spec)
+    sys.modules["settings"] = settings
+    spec.loader.exec_module(settings)
+
+except (FileNotFoundError, ImportError, ModuleNotFoundError):
     print("\nsettings.py not found!\n")
     settingsfile = pkg_resources.read_text("pan_deduper", "settings.py")
     try:
@@ -157,7 +161,7 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None):
     Raises:
          N/A
     """
-    if config:
+    if config is not None:
         if not settings.device_groups:
             dgs = config.find(
                 "devices/entry[@name='localhost.localdomain']/device-group"
@@ -232,7 +236,7 @@ async def run_deduper(
                 results[object_type].update({dupe: dgs})
 
     write_output(results)
-    print("Duplicates found: \n")
+    print("\nDuplicates found: \n")
     pprint(results)
 
     if settings.push_to_panorama and not configstr:
@@ -297,6 +301,16 @@ async def push_to_panorama(pan, results) -> None:
     await do_the_deletes(
         object_types=["addresses", "services"], pan=pan, results=results
     )
+
+    # # Now lets delete shared?!
+    # params = {"location": "shared"}
+    # coroutines = []
+    # for object_type in settings.to_dedupe:
+    #     coroutines = [
+    #         pan.get_objects(object_type=object_type, params=params)
+    #     ]
+    #
+    # shared_objs = await asyncio.gather(*coroutines)
 
 
 async def do_the_creates(
