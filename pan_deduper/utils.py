@@ -5,6 +5,7 @@ import json
 import logging
 import sys
 from itertools import combinations
+from datetime import datetime
 from typing import Any, Dict, List
 
 from lxml import etree
@@ -32,7 +33,9 @@ try:
     spec.loader.exec_module(settings)
 
 except (FileNotFoundError, ImportError, ModuleNotFoundError):
-    print("\nsettings.py not found!\n")
+    print("\nThanks for using PAN Deduper...")
+    print("settings.py not found!")
+    print("We assume this is your first time..\n")
     settingsfile = pkg_resources.read_text("pan_deduper", "settings.py")
     try:
         with open("settings.py", "w") as f:
@@ -95,6 +98,8 @@ async def get_objects(pan: Panorama_api, object_type: str, names_only: bool = Tr
     Raises:
         N/A
     """
+
+    print("Getting objects/checking for duplicates..")
     my_objs = {}
     for dg in settings.device_groups:
         # Get objects
@@ -177,8 +182,8 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None):
             if dg in settings.device_groups:
                 settings.device_groups.remove(dg)
 
-    print(f"Comparing these device groups:\n\t{settings.device_groups}")
-    print(f"and these object types:\n\t{settings.to_dedupe}")
+    print(f"\nComparing these DEVICE GROUPS:\n{settings.device_groups}")
+    print(f"\nand these OBJECT TYPES:\n{settings.to_dedupe}\n")
 
 
 async def run_deduper(
@@ -209,6 +214,7 @@ async def run_deduper(
     if configstr:
         config = etree.fromstring(configstr)
         await set_device_groups(config=config)
+        print("\n\tGetting...\n")
         my_objs = [
             get_objects_xml(config, object_type) for object_type in settings.to_dedupe
         ]
@@ -221,8 +227,10 @@ async def run_deduper(
             get_objects(pan, object_type, names_only=True)
             for object_type in settings.to_dedupe
         ]
+        print("\n\tGetting...\n")
         my_objs = await asyncio.gather(*coroutines)
 
+    print("\n\tDeduplicating...\n")
     # Comment the black magic
     results = {}
     for obj in my_objs:
@@ -237,18 +245,24 @@ async def run_deduper(
 
     write_output(results)
     print("\nDuplicates found: \n")
-    pprint(results)
+    length = 0
+    for k,v in results.items():
+        length += len(v)
+    if length >= 0:
+        pprint(results)
 
-    if settings.push_to_panorama and not configstr:
-        yesno = ""
-        while yesno not in ("y", "n", "yes", "no"):
-            yesno = input("About to begin moving duplicate objects...continue? (y/n): ")
-        if yesno == "yes" or yesno == "y":
-            await push_to_panorama(pan=pan, results=results)
-        else:
-            print("Done! Output above also saved in duplicates.json.")
-    else:
-        print("Done! Output above also saved in duplicates.json.")
+        if settings.push_to_panorama and not configstr:
+            yesno = ""
+            while yesno not in ("y", "n", "yes", "no"):
+                yesno = input("About to begin moving duplicate objects...continue? (y/n): ")
+            if yesno == "yes" or yesno == "y":
+                await push_to_panorama(pan=pan, results=results)
+        #     else:
+        #         print("Done! Output above also saved in duplicates.json.")
+        # else:
+        #     print("Done! Output above also saved in duplicates.json.")
+
+    print("\n\tDone! Output above also saved in duplicates.json.\n")
 
 
 async def push_to_panorama(pan, results) -> None:
@@ -391,5 +405,7 @@ def write_output(results):
     """
     # Write output to file
     json_str = json.dumps(results, indent=4)
-    with open("duplicates.json", "w") as f:
+
+    dt = datetime.now().strftime("%Y-%m-%d::%H:%M:%S")
+    with open(f"duplicates-{dt}.json", "w") as f:
         f.write(json_str)

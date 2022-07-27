@@ -19,7 +19,7 @@ def xml(
         None, "--filename", "-f", prompt="XML FIlename: "
     )
 ):
-    print("XML Time!")
+    print("\n\tXML Time!\n")
 
     try:
         with open(filename) as f:
@@ -51,10 +51,9 @@ def panorama(
         "-p",
         prompt="Panorama Password: ",
         hide_input=True,
-    ),
-    future: Optional[str] = typer.Option(None),
+    )
 ):
-
+    print("\n\tPanorama Time!\n")
     asyncio.run(run_deduper(panorama=panorama, username=username, password=password))
 
 
