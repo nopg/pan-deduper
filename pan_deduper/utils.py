@@ -4,13 +4,13 @@ import importlib.util
 import json
 import logging
 import sys
-from itertools import combinations
 from datetime import datetime
+from itertools import combinations
 from typing import Any, Dict, List
 
 from lxml import etree
-from rich.pretty import pprint
 from lxml.etree import XMLSyntaxError
+from rich.pretty import pprint
 
 from pan_deduper.panorama_api import Panorama_api
 
@@ -34,9 +34,11 @@ try:
     spec.loader.exec_module(settings)
 
 except (FileNotFoundError, ImportError, ModuleNotFoundError):
+    print("------------------------------------")
     print("\nThanks for using PAN Deduper...")
     print("settings.py not found!")
     print("We assume this is your first time..\n")
+    print("------------------------------------")
     settingsfile = pkg_resources.read_text("pan_deduper", "settings.py")
     try:
         with open("settings.py", "w") as f:
@@ -100,7 +102,7 @@ async def get_objects(pan: Panorama_api, object_type: str, names_only: bool = Tr
         N/A
     """
 
-    print("Getting objects/checking for duplicates..")
+    print(f"Getting {object_type}/checking for duplicates..")
     my_objs = {}
     for dg in settings.device_groups:
         # Get objects
@@ -255,7 +257,7 @@ async def run_deduper(
     write_output(results)
     print("\nDuplicates found: \n")
     length = 0
-    for k,v in results.items():
+    for k, v in results.items():
         length += len(v)
     if length > 0:
         print(length)
@@ -264,7 +266,9 @@ async def run_deduper(
         if settings.push_to_panorama and not configstr:
             yesno = ""
             while yesno not in ("y", "n", "yes", "no"):
-                yesno = input("About to begin moving duplicate objects...continue? (y/n): ")
+                yesno = input(
+                    "About to begin moving duplicate objects...continue? (y/n): "
+                )
             if yesno == "yes" or yesno == "y":
                 await push_to_panorama(pan=pan, results=results)
         #     else:
@@ -301,6 +305,7 @@ async def push_to_panorama(pan, results) -> None:
 
     # Order of creation/deletion is super important...thus hard-coded here
     # Do the creates
+    print("\ntail -f or open 'deduper.log' in your favorite editor to watch the show..\n")
     print("\nCreating objects...")
     await do_the_creates(
         object_types=["addresses", "services"],

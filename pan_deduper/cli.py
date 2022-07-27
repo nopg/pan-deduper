@@ -51,7 +51,7 @@ def panorama(
         "-p",
         prompt="Panorama Password: ",
         hide_input=True,
-    )
+    ),
 ):
     print("\n\tPanorama Time!\n")
     asyncio.run(run_deduper(panorama=panorama, username=username, password=password))
