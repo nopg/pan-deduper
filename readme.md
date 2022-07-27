@@ -33,6 +33,7 @@ Grab objects from .xml file:
 TODO:
 delete shared
 deep checker(values)
+
 break testing in many ways\
 tests?!\
 cleanup/refactor\

@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from lxml import etree
 from rich.pretty import pprint
+from lxml.etree import XMLSyntaxError
 
 from pan_deduper.panorama_api import Panorama_api
 
@@ -211,15 +212,23 @@ async def run_deduper(
     logger.info("----Running deduper---")
     logger.info("")
 
+    my_objs = []
+
     if configstr:
-        config = etree.fromstring(configstr)
+        try:
+            config = etree.fromstring(configstr)
+        except XMLSyntaxError as e:
+            print(e)
+            print("\nInvalid XML File...try again! Our best guess is up there ^^^\n")
+            sys.exit(1)
+
         await set_device_groups(config=config)
         print("\n\tGetting...\n")
         my_objs = [
             get_objects_xml(config, object_type) for object_type in settings.to_dedupe
         ]
 
-    else:
+    elif panorama:
         pan = Panorama_api(panorama=panorama, username=username, password=password)
         await pan.login()
         await set_device_groups(pan=pan)
@@ -248,7 +257,8 @@ async def run_deduper(
     length = 0
     for k,v in results.items():
         length += len(v)
-    if length >= 0:
+    if length > 0:
+        print(length)
         pprint(results)
 
         if settings.push_to_panorama and not configstr:
