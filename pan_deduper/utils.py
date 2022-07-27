@@ -3,7 +3,7 @@ import json
 import logging
 import sys
 from itertools import combinations
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 from lxml import etree
 from rich.pretty import pprint
@@ -247,43 +247,72 @@ async def push_to_panorama(pan, results) -> None:
     ]
     objs_list = await asyncio.gather(*coroutines)
 
+    # Order of creation/deletion is super important...thus hard-coded here
     # Do the creates
-    for object_type in ["addresses", "address-groups", "services", "service-groups"]:
-        if results.get(object_type):
-            print(f"Creating {object_type} objects...")
-            await do_the_creates(pan=pan, results=results, objs_list=objs_list, object_type=object_type, device_groups=settings.parent_device_group)
+    print("creating objects...")
+    await do_the_creates(
+        object_types=["addresses", "services"],
+        pan=pan,
+        results=results,
+        objs_list=objs_list,
+    )
+    print("creating object groups...")
+    await do_the_creates(
+        object_types=["address-groups", "service-groups"],
+        pan=pan,
+        results=results,
+        objs_list=objs_list,
+    )
 
     # Now do the deletes
-    for object_type in ["address-groups", "addresses", "service-groups", "services"]:
+    print("deleting object groups...")
+    await do_the_deletes(
+        object_types=["address-groups", "service-groups"], pan=pan, results=results
+    )
+    print("deleting objects...")
+    await do_the_deletes(
+        object_types=["addresses", "services"], pan=pan, results=results
+    )
+
+
+async def do_the_creates(
+    pan: Panorama_api, results: Dict, object_types: List[str], objs_list: Any
+):
+    coroutines = []
+    for object_type in object_types:
         if results.get(object_type):
-            print(f"Deleting {object_type} objects...")
-            await do_the_deletes(pan=pan, object_type=object_type, results=results)
+            for dupe, device_groups in results[object_type].items():
+                dupe_obj = find_object(
+                    objs_list=objs_list,
+                    object_type=object_type,
+                    device_groups=device_groups,
+                    name=dupe,
+                )
+
+                coroutines.append(
+                    pan.create_object(
+                        object_type=object_type,
+                        obj=dupe_obj,
+                        device_group=settings.parent_device_group,
+                    )
+                )
+
+    await asyncio.gather(*coroutines)
 
 
-async def do_the_creates(pan: Panorama_api, results: Dict, object_type: str, objs_list: Any, device_groups: Dict):
-    for dupe, device_groups in results[object_type].items():
-        dupe_obj = find_object(
-            objs_list=objs_list,
-            object_type=object_type,
-            device_groups=device_groups,
-            name=dupe,
-        )
+async def do_the_deletes(pan: Panorama_api, results: Dict, object_types: List[str]):
+    coroutines = []
+    for object_type in object_types:
+        if results.get(object_type):
+            for dupe, device_groups in results[object_type].items():
+                for dg in device_groups:
+                    coroutines.append(
+                        pan.delete_object(
+                            object_type=object_type, name=dupe, device_group=dg
+                        )
+                    )
 
-        print(
-            await pan.create_object(
-                object_type=object_type,
-                obj=dupe_obj,
-                device_groups=settings.parent_device_group,
-            )
-        )
-
-
-async def do_the_deletes(pan: Panorama_api, results: Dict, object_type: str):
-    for dupe, device_groups in results[object_type].items():
-        for dg in device_groups:
-            await pan.delete_object(
-                object_type=object_type, name=dupe, device_group=dg
-            )
+    await asyncio.gather(*coroutines)
 
 
 def find_object(objs_list, object_type, device_groups, name):

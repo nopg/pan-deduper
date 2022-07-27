@@ -23,3 +23,10 @@ Grab objects from .xml file:
 
 `deduper xml -f filename.xml`
 
+TODO:
+
+local settings.py? for pip installers
+logging
+break testing in many ways
+tests?!
+cleanup/refactor

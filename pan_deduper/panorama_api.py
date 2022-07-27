@@ -148,14 +148,13 @@ class Panorama_api:
 
         try:
             response = await self.session[self.APIKEY].delete(
-                url=url,
-                headers=headers,
-                params=params,
+                url=url, headers=headers, params=params, timeout=10
             )
         except httpx.RequestError as e:
             print(dir(e))
             print(f"{url=}")
-            print("Request error: ", e)
+            print(f"{params=}")
+            print("Request error: ", e.request)
             sys.exit()
         except httpx.HTTPStatusError as e:
             print(f"{url=}")
@@ -239,11 +238,11 @@ class Panorama_api:
 
         print(f"deleting {name} from {device_group}")
         response = await self.delete_request(url=url, params=params)
-        print(response)
+        print(f"{name} deletede from {device_group}? {response}")
 
         return None
 
-    async def create_object(self, object_type: str, obj: Dict, device_groups: str):
+    async def create_object(self, object_type: str, obj: Dict, device_group: str):
         """
         Create object
 
@@ -270,13 +269,13 @@ class Panorama_api:
             print(f"Unsupported object_type sent: {object_type}")
             sys.exit(0)
 
-        for dg in device_groups:
+        for dg in device_group:
             params = {
                 "location": "device-group",
                 "device-group": f"{dg}",
                 "name": obj["@name"],
             }
-            print(f"creating {obj['@name']} in {dg}")
+            # print(f"creating {obj['@name']} in {dg}")
 
             for k in remove_keys:
                 if obj.get(k):
