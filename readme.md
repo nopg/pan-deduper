@@ -25,8 +25,9 @@ Grab objects from .xml file:
 
 TODO:
 
-local settings.py? for pip installers
-logging
-break testing in many ways
-tests?!
-cleanup/refactor
+local settings.py? for pip installers\
+logging\
+break testing in many ways\
+tests?!\
+cleanup/refactor\
+
