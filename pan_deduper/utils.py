@@ -3,6 +3,7 @@ import json
 import logging
 import sys
 from itertools import combinations
+from typing import Dict, List, Any
 
 from lxml import etree
 from rich.pretty import pprint
@@ -246,30 +247,106 @@ async def push_to_panorama(pan, results) -> None:
     ]
     objs_list = await asyncio.gather(*coroutines)
 
-    # Pull out only the duplicate objects
-    for object_type, dupes in results.items():
-        for dupe, device_groups in dupes.items():
+    # # Pull out only the duplicate objects
+    # for object_type, dupes in results.items():
+    #     for dupe, device_groups in dupes.items():
+    #         dupe_obj = find_object(
+    #             objs_list=objs_list,
+    #             object_type=object_type,
+    #             device_groups=device_groups,
+    #             name=dupe,
+    #         )
+    #
+    #         # Found object! (dupe_obj) now let's remove them:
+    #         for dg in device_groups:
+    #             await pan.delete_object(
+    #                 object_type=object_type, name=dupe_obj["@name"], device_group=dg
+    #             )
+    #
+    #         # And add it to the parent group:
+    #         print(
+    #             await pan.create_object(
+    #                 object_type=object_type,
+    #                 obj=dupe_obj,
+    #                 device_groups=settings.parent_device_group,
+    #             )
+    #         )
+
+    if results.get("addresses"):
+        print(f"doing the things for addresses")
+        await do_the_creates2(pan=pan, results=results, objs_list=objs_list, object_type="addresses",  device_groups=settings.parent_device_group)
+
+        if results.get("address-groups"):
+            await do_the_creates2(pan=pan, results=results, objs_list=objs_list, object_type="address-groups", device_groups=settings.parent_device_group)
+
+        #  And now let's remove them from local device groups:
+        if results.get("address-groups"):
+            for dupe, device_groups in results["address-groups"].items():
+                dupe_obj = find_object(
+                    objs_list=objs_list,
+                    object_type="address-groups",
+                    device_groups=device_groups,
+                    name=dupe,
+                )
+                await do_the_deletes(pan=pan, object_type="address-groups", dupe_obj=dupe_obj,
+                                     device_groups=device_groups)
+
+        for dupe, device_groups in results["addresses"].items():
             dupe_obj = find_object(
                 objs_list=objs_list,
-                object_type=object_type,
+                object_type="addresses",
                 device_groups=device_groups,
                 name=dupe,
             )
+            await do_the_deletes(pan=pan, object_type="addresses", dupe_obj=dupe_obj, device_groups=device_groups)
+        input("next?: ")
+    # if results.get("services"):
+    #     print(f"doing the things for services")
+    #     await do_the_things(pan=pan, object_type="services", dupes=results["services"], objs_list=objs_list)
+    #     input("next?: ")
+    # if results.get("address-groups"):
+    #     print(f"doing the things for address-groups")
+    #     await do_the_things(pan=pan, object_type="address-groups", dupes=results["address-groups"], objs_list=objs_list)
+    #     input("next?: ")
+    # if results.get("service-groups"):
+    #     print(f"doing the things for service-groups")
+    #     await do_the_things(pan=pan, object_type="service-groups", dupes=results["service-groups"], objs_list=objs_list)
+    #     input("next?: ")
 
-            # Found object! (dupe_obj) now let's remove them:
-            for dg in device_groups:
-                await pan.delete_object(
-                    object_type=object_type, name=dupe_obj["@name"], device_group=dg
-                )
 
-            # And add it to the parent group:
-            print(
-                await pan.create_object(
-                    object_type=object_type,
-                    obj=dupe_obj,
-                    device_groups=settings.parent_device_group,
-                )
+async def do_the_creates2(pan: Panorama_api, results: Dict, object_type: str, objs_list: Any, device_groups: Dict):
+    for dupe, device_groups in results[object_type].items():
+        dupe_obj = find_object(
+            objs_list=objs_list,
+            object_type=object_type,
+            device_groups=device_groups,
+            name=dupe,
+        )
+
+        print(
+            await pan.create_object(
+                object_type=object_type,
+                obj=dupe_obj,
+                device_groups=settings.parent_device_group,
             )
+        )
+
+
+async def do_the_creates(pan: Panorama_api, object_type: str, dupe_obj: Dict, device_groups: Dict):
+    print(
+        await pan.create_object(
+            object_type=object_type,
+            obj=dupe_obj,
+            device_groups=settings.parent_device_group,
+        )
+    )
+
+
+async def do_the_deletes(pan: Panorama_api, object_type: str, dupe_obj: Dict, device_groups: Dict):
+    for dg in device_groups:
+        await pan.delete_object(
+            object_type=object_type, name=dupe_obj["@name"], device_group=dg
+        )
 
 
 def find_object(objs_list, object_type, device_groups, name):
