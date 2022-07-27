@@ -4,7 +4,7 @@ from typing import Optional
 
 import typer
 
-import pan_deduper.utils as utils
+from pan_deduper.utils import run_deduper
 
 app = typer.Typer(
     name="deduper",
@@ -29,7 +29,7 @@ def xml(
         print("\nFile open failed...typo?\n")
         sys.exit(1)
 
-    asyncio.run(utils.run(configstr=configstr))
+    asyncio.run(run_deduper(configstr=configstr))
 
 
 @app.command("panorama", help="Gather objects/services via Panorama")
@@ -55,7 +55,7 @@ def panorama(
     future: Optional[str] = typer.Option(None),
 ):
 
-    asyncio.run(utils.run(panorama=panorama, username=username, password=password))
+    asyncio.run(run_deduper(panorama=panorama, username=username, password=password))
 
 
 if __name__ == "__main__":

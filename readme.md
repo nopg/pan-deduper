@@ -10,6 +10,10 @@ To install run:
 - `source myenv/bin/activate` <-- and activate it
 - `pip install git+https://github.com/glspi/pan-deduper.git`
 
+A 'settings.py' file is used for 'settings' (shocking huh?)
+just run 'deduper' and it will be automatically created for you. Review the existing
+settings and tweak as needed.
+
 ## Usage
 To use:
 `deduper --help`

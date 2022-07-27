@@ -1,4 +1,6 @@
 import asyncio
+import importlib
+import importlib.resources as pkg_resources
 import json
 import logging
 import sys
@@ -8,7 +10,6 @@ from typing import Any, Dict, List
 from lxml import etree
 from rich.pretty import pprint
 
-import pan_deduper.settings as settings
 from pan_deduper.panorama_api import Panorama_api
 
 # Logging setup:
@@ -22,6 +23,23 @@ except PermissionError:
     sys.exit(1)
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
+
+# Import 'settings' at runtime
+try:
+    settings = importlib.import_module("settings")
+except (ImportError, ModuleNotFoundError):
+    print("\nsettings.py not found!\n")
+    settingsfile = pkg_resources.read_text("pan_deduper", "settings.py")
+    try:
+        with open("settings.py", "w") as f:
+            f.write(settingsfile)
+    except IOError as e:
+        print("Error creating settings.py in local directory, permissions issue?")
+        sys.exit(1)
+    print(
+        "Default settings created in local directory, please review 'settings.py' and run again.\n"
+    )
+    sys.exit(0)
 
 
 def get_objects_xml(config, object_type):
@@ -159,7 +177,7 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None):
     print(f"and these object types:\n\t{settings.to_dedupe}")
 
 
-async def run(
+async def run_deduper(
     *,
     configstr: str = None,
     panorama: str = None,
@@ -180,6 +198,10 @@ async def run(
     Raises:
         N/A
     """
+    logger.info("")
+    logger.info("----Running deduper---")
+    logger.info("")
+
     if configstr:
         config = etree.fromstring(configstr)
         await set_device_groups(config=config)
@@ -240,23 +262,25 @@ async def push_to_panorama(pan, results) -> None:
     Raises:
         N/A
     """
+    print("\nBeginning push..\n")
     # Get full objects so we can create them elsewhere
     coroutines = [
         get_objects(pan=pan, object_type=object_type, names_only=False)
         for object_type, dupes in results.items()
     ]
+    print("Gathering full objects..")
     objs_list = await asyncio.gather(*coroutines)
 
     # Order of creation/deletion is super important...thus hard-coded here
     # Do the creates
-    print("creating objects...")
+    print("\nCreating objects...")
     await do_the_creates(
         object_types=["addresses", "services"],
         pan=pan,
         results=results,
         objs_list=objs_list,
     )
-    print("creating object groups...")
+    print("\nCreating object groups...")
     await do_the_creates(
         object_types=["address-groups", "service-groups"],
         pan=pan,
@@ -265,11 +289,11 @@ async def push_to_panorama(pan, results) -> None:
     )
 
     # Now do the deletes
-    print("deleting object groups...")
+    print("\nDeleting object groups...")
     await do_the_deletes(
         object_types=["address-groups", "service-groups"], pan=pan, results=results
     )
-    print("deleting objects...")
+    print("\nDeleting objects...")
     await do_the_deletes(
         object_types=["addresses", "services"], pan=pan, results=results
     )

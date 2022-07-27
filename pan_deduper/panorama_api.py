@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 from typing import Any, Dict
@@ -84,17 +85,14 @@ class Panorama_api:
             response = await self.session[self.APIKEY].get(
                 url=url, headers=headers, params=params
             )
+            return response.json()
         except httpx.RequestError as e:
-            print(dir(e))
-            print(f"{url=}")
-            print("Request error: ", e)
-            sys.exit()
+            print("Request error: ", e.request)
+            logger.error(f"Error getting {url}.")
         except httpx.HTTPStatusError as e:
             print(f"{url=}")
             print("HTTP Status error: ", e)
             sys.exit()
-
-        return response.json()
 
     async def post_request(
         self, url: str, data: Dict, headers: Dict = None, params: Dict = None
@@ -116,19 +114,16 @@ class Panorama_api:
 
         try:
             response = await self.session[self.APIKEY].post(
-                url=url, headers=headers, params=params, json=data
+                url=url, headers=headers, params=params, json=data, timeout=120
             )
+            return response.json()
         except httpx.RequestError as e:
-            print(dir(e))
-            print(f"{url=}")
-            print("Request error: ", e)
-            sys.exit()
+            print("Request error: ", e.request)
+            logger.error(f"Request Error: {url}.")
         except httpx.HTTPStatusError as e:
             print(f"{url=}")
             print("HTTP Status error: ", e)
             sys.exit()
-
-        return response.json()
 
     async def delete_request(self, url: str, headers: Dict = None, params: Dict = None):
         """
@@ -148,20 +143,16 @@ class Panorama_api:
 
         try:
             response = await self.session[self.APIKEY].delete(
-                url=url, headers=headers, params=params, timeout=10
+                url=url, headers=headers, params=params, timeout=120
             )
+            return response.json()
         except httpx.RequestError as e:
-            print(dir(e))
-            print(f"{url=}")
-            print(f"{params=}")
             print("Request error: ", e.request)
-            sys.exit()
+            logger.error(f"Request Error: {url}.")
         except httpx.HTTPStatusError as e:
             print(f"{url=}")
             print("HTTP Status error: ", e)
             sys.exit()
-
-        return response.json()
 
     async def get_device_groups(self):
         response = await self.get_request(url="Panorama/DeviceGroups")
@@ -173,19 +164,21 @@ class Panorama_api:
             print("No Device Groups found..whatchu doing?")
             sys.exit(1)
 
-    async def get_objects(self, object_type: str, device_group: str):
+    async def get_objects(self, object_type: str, device_group: str, params: Dict = None):
         """
         Get Objects from API
 
         Args:
-            object_type:
-            device_group:
+            object_type: addresses/groups/service/groups
+            device_group:   device group
+            params: parameters on where to get objects from
         Returns:
              Dict of objects
         Raises:
             N/A
         """
-        params = {"location": "device-group", "device-group": f"{device_group}"}
+        if not params:
+            params = {"location": "device-group", "device-group": f"{device_group}"}
 
         if object_type == "addresses":
             url = "Objects/Addresses"
@@ -236,9 +229,16 @@ class Panorama_api:
             "name": name,
         }
 
-        print(f"deleting {name} from {device_group}")
         response = await self.delete_request(url=url, params=params)
-        print(f"{name} deletede from {device_group}? {response}")
+
+        if response:
+            if response["@code"] == "20":
+                logger.info(f"Deleted {name} from {device_group}.")
+            else:
+                logger.error(f"Failed to delete {name} from {device_group}:")
+                logger.error(response["message"])
+        else:
+            logger.error(f"Failed to delete {name} from {device_group}:")
 
         return None
 
@@ -275,7 +275,6 @@ class Panorama_api:
                 "device-group": f"{dg}",
                 "name": obj["@name"],
             }
-            # print(f"creating {obj['@name']} in {dg}")
 
             for k in remove_keys:
                 if obj.get(k):
@@ -284,5 +283,13 @@ class Panorama_api:
             obj = {"entry": obj}
 
             response = await self.post_request(url=url, params=params, data=obj)
-            print(response)
+
+            if response:
+                if response["@code"] == "20":
+                    logger.info(f"Created {obj['entry']['@name']} in {dg}.")
+                else:
+                    logger.error(f"Failed to create {obj['entry']['@name']} in {dg}:")
+                    logger.error(response["message"])
+            else:
+                logger.error(f"Failed to create {obj['entry']['@name']} in {dg}:")
             return obj
