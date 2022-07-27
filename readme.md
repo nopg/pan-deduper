@@ -3,6 +3,9 @@ Panorama Object Deduper
 Tool to check objects (addresses, address-groups, services, service-groups) across all Device Groups
 and move duplicates into a (pre-existing) parent device group.
 
+## Notes
+Have fun!
+
 ## Installation
 To install run:
 
@@ -28,9 +31,8 @@ Grab objects from .xml file:
 `deduper xml -f filename.xml`
 
 TODO:
-
-local settings.py? for pip installers\
-logging\
+delete shared
+deep checker(values)
 break testing in many ways\
 tests?!\
 cleanup/refactor\

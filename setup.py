@@ -1,14 +1,14 @@
 """pan_deduper"""
 import setuptools
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 __author__ = "Ryan Gillespie"
 
 setuptools.setup(
     name="pan_deduper",
     version=__version__,
     packages=["pan_deduper"],
-    install_requires=["httpx==0.23.0", "typer==0.6.1", "lxml==4.9.1"],
+    install_requires=["httpx==0.23.0", "typer==0.6.1", "lxml==4.9.1", "rich==12.5.1"],
     classifiers=[
         "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
         "Operating System :: POSIX :: Linux",
