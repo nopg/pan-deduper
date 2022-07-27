@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import sys
 from itertools import combinations
 
 from lxml import etree
@@ -23,6 +24,17 @@ logger.addHandler(file_handler)
 
 
 def get_objects_xml(config, object_type):
+    """
+    Get objects from xml file instead of Panorama
+
+    Args:
+        config: xml config string
+        object_type: address/group/services/groups
+    Returns:
+         Dict/list of objects
+    Raises:
+        N/A
+    """
     my_objs = {}
     for dg in settings.device_groups:
         object_xpath = None
@@ -47,7 +59,19 @@ def get_objects_xml(config, object_type):
     return {object_type: my_objs}
 
 
-async def get_objects(pan, object_type, names_only=True):
+async def get_objects(pan: Panorama_api, object_type: str, names_only: bool = True):
+    """
+    Get objects from Panorama API
+
+    Args:
+        pan:    Panorama API Object
+        object_type:    address/group/service/group
+        names_only: return only the names or the full object
+    Returns:
+         Dict/List of objects
+    Raises:
+        N/A
+    """
     my_objs = {}
     for dg in settings.device_groups:
         # Get objects
@@ -75,6 +99,16 @@ async def get_objects(pan, object_type, names_only=True):
 
 
 def find_duplicates(my_objects):
+    """
+    Finds the duplicate objects (multiple device groups contain the object)
+
+    Args:
+     my_objects: list of objects to search through
+    Returns:
+        duplicates: Dict of duplicate object names containing list of device-groups
+    Raises:
+        N/A
+    """
     duplicates = {}
     for items in combinations(my_objects, r=2):
         dupes = my_objects[items[0]].intersection(my_objects[items[1]])
@@ -92,6 +126,18 @@ def find_duplicates(my_objects):
 
 
 async def set_device_groups(*, config=None, pan: Panorama_api = None):
+    """
+    Set the device groups that will be searched through
+
+    Args:
+        only 1 of below should be provided
+        config: xml config string (if provided)
+        pan: panorama object (if provided)
+    Returns:
+        N/A
+    Raises:
+         N/A
+    """
     if config:
         if not settings.device_groups:
             dgs = config.find(
@@ -118,15 +164,20 @@ async def run(
     panorama: str = None,
     username: str = None,
     password: str = None,
-):
+) -> None:
     """
     Main program
 
-    :param configstr:
-    :param panorama:
-    :param username:
-    :param password:
-    :return:
+    Args:
+        configstr:  xml config file string
+        panorama:   panorama IP/FQDN
+        username:   panorama username
+        password:   panorama password
+    Returns:
+        N/A
+
+    Raises:
+        N/A
     """
     if configstr:
         config = etree.fromstring(configstr)
@@ -173,13 +224,29 @@ async def run(
         print("Done! Output above also saved in duplicates.json.")
 
 
-async def push_to_panorama(pan, results):
+async def push_to_panorama(pan, results) -> None:
+    """
+    Push the changes to Panorama
+
+    Delete objects from local device groups
+    Add objects to parent device group
+
+    Args:
+        pan: panorama api object
+        results: duplicates to be cleaned up
+    Returns:
+         N/A
+    Raises:
+        N/A
+    """
+    # Get full objects so we can create them elsewhere
     coroutines = [
         get_objects(pan=pan, object_type=object_type, names_only=False)
         for object_type, dupes in results.items()
     ]
     objs_list = await asyncio.gather(*coroutines)
 
+    # Pull out only the duplicate objects
     for object_type, dupes in results.items():
         for dupe, device_groups in dupes.items():
             dupe_obj = find_object(
@@ -206,6 +273,19 @@ async def push_to_panorama(pan, results):
 
 
 def find_object(objs_list, object_type, device_groups, name):
+    """
+    Find object to be used for creation in parent device group
+
+    Args:
+        objs_list:  List of objects to search through
+        object_type:    address/group/services/groups
+        device_groups:  device group
+        name:   name of object to find
+    Returns:
+         The object you were looking for
+    Raises:
+        N/A
+    """
     for items in objs_list:
         if items.get(object_type):
             for obj in items[object_type][
@@ -217,13 +297,17 @@ def find_object(objs_list, object_type, device_groups, name):
             pass
 
 
-def get_full_object(objs, name):
-    for obj in objs:
-        if obj["@name"] == name:
-            return obj
-
-
 def write_output(results):
+    """
+    Write json string to file
+
+    Args:
+        results: dictionary of duplicate results
+    Returns:
+         N/A
+    Raises:
+        N/A
+    """
     # Write output to file
     json_str = json.dumps(results, indent=4)
     with open("duplicates.json", "w") as f:

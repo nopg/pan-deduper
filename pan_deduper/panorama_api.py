@@ -11,6 +11,18 @@ logger = logging.getLogger("utils")
 
 class Panorama_api:
     def __init__(self, panorama: str, username: str, password: str) -> None:
+        """
+        Initialize Panorama API Object
+
+        Args:
+            panorama: Panorama IP/FQDN
+            username: username
+            password: password
+        Returns:
+            N/A
+        Raises:
+            N/A
+        """
         self.session: Dict[str, Any] = {}
         self.panorama = panorama
         self.username = username
@@ -163,6 +175,17 @@ class Panorama_api:
             sys.exit(1)
 
     async def get_objects(self, object_type: str, device_group: str):
+        """
+        Get Objects from API
+
+        Args:
+            object_type:
+            device_group:
+        Returns:
+             Dict of objects
+        Raises:
+            N/A
+        """
         params = {"location": "device-group", "device-group": f"{device_group}"}
 
         if object_type == "addresses":
@@ -184,6 +207,18 @@ class Panorama_api:
             return None
 
     async def delete_object(self, object_type: str, name: str, device_group: str):
+        """
+        Delete objects
+
+        Args:
+            object_type: object type.. (address/group/service/groups)
+            name:   name of object
+            device_group:   device group..
+        Returns:
+             response message (dict)
+        Raises:
+            N/A
+        """
         if object_type == "addresses":
             url = "Objects/Addresses"
         elif object_type == "address-groups":
@@ -209,6 +244,18 @@ class Panorama_api:
         return None
 
     async def create_object(self, object_type: str, obj: Dict, device_groups: str):
+        """
+        Create object
+
+        Args:
+            object_type:
+            obj:
+            device_groups:
+        Returns:
+             response message (dict)
+        Raises:
+            N/A
+        """
         remove_keys = ["@location", "@device-group", "@loc", "@overrides"]
 
         if object_type == "addresses":
