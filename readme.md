@@ -31,10 +31,8 @@ Grab objects from .xml file:
 `deduper xml -f filename.xml`
 
 TODO:
-delete shared
-deep checker(values)
-
+deep checker(values)\
+major cleanup/refactor\
 break testing in many ways\
 tests?!\
-cleanup/refactor\
-
+obj for obj in objs if obj["@loc"] not in settings.exclude_device_groups---parent?\

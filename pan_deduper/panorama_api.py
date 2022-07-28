@@ -200,7 +200,7 @@ class Panorama_api:
         else:
             return None
 
-    async def delete_object(self, object_type: str, name: str, device_group: str):
+    async def delete_object(self, object_type: str, name: str, device_group: str = None, params: Dict = None):
         """
         Delete objects
 
@@ -208,6 +208,7 @@ class Panorama_api:
             object_type: object type.. (address/group/service/groups)
             name:   name of object
             device_group:   device group..
+            params: params (shared)
         Returns:
              response message (dict)
         Raises:
@@ -224,12 +225,15 @@ class Panorama_api:
         else:
             print(f"Unsupported object_type sent: {object_type}")
             sys.exit(0)
-
-        params = {
-            "location": "device-group",
-            "device-group": f"{device_group}",
-            "name": name,
-        }
+        if not params:
+            params = {
+                "location": "device-group",
+                "device-group": f"{device_group}",
+                "name": name,
+            }
+        else:
+            device_group = "shared"
+            params["name"] = name
 
         response = await self.delete_request(url=url, params=params)
 

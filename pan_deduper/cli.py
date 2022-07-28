@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from typing import Optional
+import platform
 
 import typer
 
@@ -11,6 +12,10 @@ app = typer.Typer(
     add_completion=False,
     help="PA address-object/group/services deduper",
 )
+
+# friggin windows
+if platform.system() == 'Windows':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 @app.command("xml", help="Gather objects/services via XML")
