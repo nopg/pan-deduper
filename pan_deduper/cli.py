@@ -1,7 +1,7 @@
 import asyncio
+import platform
 import sys
 from typing import Optional
-import platform
 
 import typer
 
@@ -14,7 +14,7 @@ app = typer.Typer(
 )
 
 # friggin windows
-if platform.system() == 'Windows':
+if platform.system() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
@@ -39,7 +39,7 @@ def xml(
 
 @app.command("panorama", help="Gather objects/services via Panorama")
 def panorama(
-    panorama: Optional[str] = typer.Option(
+    panorama_ip: Optional[str] = typer.Option(
         None,
         "--panorama",
         "-i",
@@ -59,7 +59,7 @@ def panorama(
     ),
 ):
     print("\n\tPanorama Time!\n")
-    asyncio.run(run_deduper(panorama=panorama, username=username, password=password))
+    asyncio.run(run_deduper(panorama=panorama_ip, username=username, password=password))
 
 
 if __name__ == "__main__":

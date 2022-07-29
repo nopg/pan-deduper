@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import sys
 from typing import Any, Dict
@@ -160,9 +159,9 @@ class Panorama_api:
             return [
                 name["@name"] for name in response["result"]["entry"]
             ]  # Just return list of names
-        else:
-            print("No Device Groups found..whatchu doing?")
-            sys.exit(1)
+
+        print("No Device Groups found..whatchu doing?")
+        sys.exit(1)
 
     async def get_objects(
         self, object_type: str, device_group: str = None, params: Dict = None
@@ -197,10 +196,12 @@ class Panorama_api:
         response = await self.get_request(url=url, params=params)
         if int(response.get("result").get("@count")) > 0:
             return response["result"]["entry"]
-        else:
-            return None
 
-    async def delete_object(self, object_type: str, name: str, device_group: str = None, params: Dict = None):
+        return None
+
+    async def delete_object(
+        self, object_type: str, name: str, device_group: str = None, params: Dict = None
+    ):
         """
         Delete objects
 
@@ -239,12 +240,12 @@ class Panorama_api:
 
         if response:
             if response["@code"] == "20":
-                logger.info(f"Deleted {name} from {device_group}.")
+                logger.info(f"Deleted {object_type}:{name} from {device_group}.")
             else:
-                logger.error(f"Failed to delete {name} from {device_group}:")
+                logger.error(f"Failed to delete {object_type}:{name} from {device_group}:")
                 logger.error(response["message"])
         else:
-            logger.error(f"Failed to delete {name} from {device_group}:")
+            logger.error(f"Failed to delete {object_type}:{name} from {device_group}:")
 
         return None
 
@@ -292,10 +293,10 @@ class Panorama_api:
 
             if response:
                 if response["@code"] == "20":
-                    logger.info(f"Created {obj['entry']['@name']} in {dg}.")
+                    logger.info(f"Created {object_type}:{obj['entry']['@name']} in {dg}.")
                 else:
-                    logger.error(f"Failed to create {obj['entry']['@name']} in {dg}:")
+                    logger.error(f"Failed to create {object_type}:{obj['entry']['@name']} in {dg}:")
                     logger.error(response["message"])
             else:
-                logger.error(f"Failed to create {obj['entry']['@name']} in {dg}:")
+                logger.error(f"Failed to create {object_type}:{obj['entry']['@name']} in {dg}:")
             return obj
