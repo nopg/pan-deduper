@@ -31,11 +31,11 @@ Grab objects from .xml file:
 `deduper xml -f filename.xml`
 
 TODO:
-find_object dg[0] logic\
+
 deep checker(values)\
-major cleanup/refactor\
+
 break testing in many ways\
 tests?!\
-obj for obj in objs if obj["@loc"] not in settings.exclude_device_groups---parent?\
-create {[]} and {}{} or {[{}]}
-check async working (print when start, prove response is slow)
+
+notes about ["@loc"] not in settings.exclude_device_groups---parent?\
+make httpx timeout even longer?(and on httpx.client)

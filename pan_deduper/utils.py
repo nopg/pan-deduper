@@ -404,7 +404,7 @@ def find_duplicates_shared(shared_objs, dupes):
         for obj_name in dupes[object_type]:
             # print(f"{obj_name=}\t {shared_objs[object_type]['shared']}")
             if obj_name in shared_objs[object_type]["shared"]:
-                print(f"found dupe: {obj_name}")
+                print(f"found dupe in shared: {obj_name}")
                 shared_duplicates[object_type].append(obj_name)
 
     return shared_duplicates
@@ -445,7 +445,7 @@ async def do_the_creates(
                 dupe_obj = find_object(
                     objs_list=objs_list,
                     object_type=object_type,
-                    device_group=device_groups[0],
+                    device_group=device_groups[0],  # just grab the object from the 1st dg
                     name=dupe,
                 )
 

@@ -236,6 +236,7 @@ class Panorama_api:
             device_group = "shared"
             params["name"] = name
 
+        logger.info(f"starting to delete {name}.")
         response = await self.delete_request(url=url, params=params)
 
         if response:
@@ -291,6 +292,7 @@ class Panorama_api:
 
             obj = {"entry": obj}
 
+            logger.info(f"starting to create {obj['entry']['@name']}.")
             response = await self.post_request(url=url, params=params, data=obj)
 
             if response:
