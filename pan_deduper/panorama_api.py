@@ -242,7 +242,9 @@ class Panorama_api:
             if response["@code"] == "20":
                 logger.info(f"Deleted {object_type}:{name} from {device_group}.")
             else:
-                logger.error(f"Failed to delete {object_type}:{name} from {device_group}:")
+                logger.error(
+                    f"Failed to delete {object_type}:{name} from {device_group}:"
+                )
                 logger.error(response["message"])
         else:
             logger.error(f"Failed to delete {object_type}:{name} from {device_group}:")
@@ -293,10 +295,16 @@ class Panorama_api:
 
             if response:
                 if response["@code"] == "20":
-                    logger.info(f"Created {object_type}:{obj['entry']['@name']} in {dg}.")
+                    logger.info(
+                        f"Created {object_type}:{obj['entry']['@name']} in {dg}."
+                    )
                 else:
-                    logger.error(f"Failed to create {object_type}:{obj['entry']['@name']} in {dg}:")
+                    logger.error(
+                        f"Failed to create {object_type}:{obj['entry']['@name']} in {dg}:"
+                    )
                     logger.error(response["message"])
             else:
-                logger.error(f"Failed to create {object_type}:{obj['entry']['@name']} in {dg}:")
+                logger.error(
+                    f"Failed to create {object_type}:{obj['entry']['@name']} in {dg}:"
+                )
             return obj

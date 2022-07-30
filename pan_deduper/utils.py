@@ -99,7 +99,7 @@ async def run_deduper(
         # Only duplicates that meet 'minimum' count
         for dupe, dgs in duplicates.items():
             if len(dgs) >= settings.minimum_duplicates:
-                results[object_type].update( {dupe: dgs} )
+                results[object_type].update({dupe: dgs})
 
     write_output(results)
     print("\nDuplicates found: \n")
@@ -181,10 +181,14 @@ async def push_to_panorama(pan, results) -> None:
         while yesno not in ("y", "n", "yes", "no"):
             yesno = input("All cleaned up...cleanup 'shared' also? (y/n): ")
         if yesno in ("yes", "y"):
-            shared_objs = await get_objects_panorama(pan=pan, shared=True, names_only=True)
+            shared_objs = await get_objects_panorama(
+                pan=pan, shared=True, names_only=True
+            )
 
             # Find shared dupes
-            shared_deletes = find_duplicates_shared(shared_objs=shared_objs,dupes=my_objs)
+            shared_deletes = find_duplicates_shared(
+                shared_objs=shared_objs, dupes=results
+            )
 
             print("Deleting from 'shared'...")
             await do_the_deletes_shared(
@@ -250,7 +254,8 @@ async def get_objects_panorama(
 
     # Get objects
     coroutines = [
-        _get_objects_panorama(pan, object_type, names_only, shared) for object_type in settings.to_dedupe
+        _get_objects_panorama(pan, object_type, names_only, shared)
+        for object_type in settings.to_dedupe
     ]
     my_objs_temp = await asyncio.gather(*coroutines)
 
@@ -261,55 +266,58 @@ async def get_objects_panorama(
     return my_objs
 
 
-async def _get_objects_panorama(pan: Panorama_api, object_type: str, names_only: bool = True, shared: bool = False):
-    my_objs = {}
+async def _get_objects_panorama(
+    pan: Panorama_api, object_type: str, names_only: bool = True, shared: bool = False
+):
+    my_objs = {object_type: {}}
+
     print(f"Getting {object_type}/checking for duplicates..")
-    my_objs[object_type] = {}
+
     if shared:
         params = {"location": "shared"}
         objs = await pan.get_objects(object_type=object_type, params=params)
-
         if not objs:
-            print(f"No {object_type} found in shared, moving on...")
+            print(f"No {object_type} found in 'shared', moving on...")
             my_objs[object_type]["shared"] = set([])
-
         else:
-            if names_only:
-                my_objs[object_type]["shared"] = set(
-                    [
-                        name["@name"]
-                        for name in objs
-                    ])
-
-            else:
-                my_objs[object_type]["shared"] = objs
-
+            my_objs[object_type]["shared"] = format_objs(
+                objs=objs, dg="shared", names_only=names_only
+            )
     else:
         for dg in settings.device_groups:
+            my_objs[object_type][dg] = []
             # Get objects
-            objs = await pan.get_objects(object_type=object_type, device_group=dg)
-
+            params = {"location": "device-group", "device-group": f"{dg}"}
+            objs = await pan.get_objects(object_type=object_type, params=params)
             if not objs:
                 print(f"No {object_type} found in {dg}, moving on...")
                 my_objs[object_type][dg] = set([])
-                continue
-
-            if names_only:
-                my_objs[object_type][dg] = set(
-                    [
-                        name["@name"]
-                        for name in objs
-                        if name["@loc"] not in settings.exclude_device_groups
-                    ]  # Global/parent DG's objects still show up
-                )  # We only care about the names, not values
             else:
-                my_objs[object_type][dg] = [
-                    obj
-                    for obj in objs
-                    if obj["@loc"] not in settings.exclude_device_groups
-                ]
+                my_objs[object_type][dg] = format_objs(
+                    objs=objs, dg=dg, names_only=names_only
+                )
 
     return my_objs
+
+
+def format_objs(objs, dg, names_only):
+    formatted_objs = []
+
+    if not names_only:
+        formatted_objs = objs
+    else:
+        for name in objs:
+            obj_name = None
+            if dg == "shared":
+                obj_name = name["@name"]
+            else:
+                if name["@loc"] not in settings.parent_device_group:
+                    obj_name = name["@name"]
+            formatted_objs.append(obj_name)
+
+        formatted_objs = set(formatted_objs)
+
+    return formatted_objs
 
 
 async def get_objects_xml(configstr):
@@ -394,7 +402,8 @@ def find_duplicates_shared(shared_objs, dupes):
     for object_type in dupes:
         shared_duplicates[object_type] = []
         for obj_name in dupes[object_type]:
-            if obj_name in shared_objs[object_type]:
+            # print(f"{obj_name=}\t {shared_objs[object_type]['shared']}")
+            if obj_name in shared_objs[object_type]["shared"]:
                 print(f"found dupe: {obj_name}")
                 shared_duplicates[object_type].append(obj_name)
 
@@ -421,6 +430,8 @@ def find_object(objs_list, object_type, device_group, name):
             if obj["@name"] == name:
                 return obj
 
+    return None
+
 
 async def do_the_creates(
     pan: Panorama_api, results: Dict, object_types: List[str], objs_list: Any
@@ -431,7 +442,12 @@ async def do_the_creates(
             for dupe, device_groups in results[object_type].items():
 
                 # Get full object
-                dupe_obj = find_object(objs_list=objs_list, object_type=object_type, device_group=device_groups[0], name=dupe)
+                dupe_obj = find_object(
+                    objs_list=objs_list,
+                    object_type=object_type,
+                    device_group=device_groups[0],
+                    name=dupe,
+                )
 
                 # Create it
                 coroutines.append(
