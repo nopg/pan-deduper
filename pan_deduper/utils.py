@@ -59,6 +59,7 @@ async def run_deduper(
     panorama: str = None,
     username: str = None,
     password: str = None,
+    deep: bool = False
 ) -> None:
     """
     Main program - BEGIN!
@@ -82,19 +83,25 @@ async def run_deduper(
 
     print("\n\tGetting...\n")
     if configstr:
-        my_objs = await get_objects_xml(configstr)
+        my_objs = await get_objects_xml(configstr, deep)
 
     elif panorama:
         pan = Panorama_api(panorama=panorama, username=username, password=password)
         await pan.login()
         await set_device_groups(pan=pan)
-        my_objs = await get_objects_panorama(pan)
+        if deep:
+            my_objs = await get_objects_panorama(pan, names_only=False)
+        else:
+            my_objs = await get_objects_panorama(pan)
 
     print("\n\tDe-duplicating...\n")
     results = {}
     for object_type in settings.to_dedupe:
         results[object_type] = {}
-        duplicates = find_duplicates(my_objs[object_type])
+        if deep:
+            duplicates = find_duplicates_deep(my_objs[object_type])
+        else:
+            duplicates = find_duplicates(my_objs[object_type])
 
         # Only duplicates that meet 'minimum' count
         for dupe, dgs in duplicates.items():
@@ -320,7 +327,7 @@ def format_objs(objs, dg, names_only):
     return formatted_objs
 
 
-async def get_objects_xml(configstr):
+async def get_objects_xml(configstr, deep = None):
     """
     Get objects from xml file instead of Panorama
 
@@ -364,7 +371,10 @@ async def get_objects_xml(configstr):
                 my_objs[object_type][dg] = set([])
                 continue
 
-            my_objs[object_type][dg] = set([name.get("name") for name in objs])
+            if deep:
+                my_objs[object_type][dg] = set(objs)
+            else:
+                my_objs[object_type][dg] = set([name.get("name") for name in objs])
 
     return my_objs
 
@@ -393,6 +403,43 @@ def find_duplicates(my_objects):
             else:
                 duplicates[obj] = list(items)
 
+    return duplicates
+
+
+def find_duplicates_deep(my_objects):
+    """
+    Finds the duplicate objects (multiple device groups contain the object)
+
+    Args:
+     my_objects: list of objects to search through
+    Returns:
+        duplicates: Dict of duplicate object names containing list of device-groups]
+    Raises:
+        N/A
+    """
+    duplicates = {}
+    # for items in combinations(my_objects, r=2):
+    #     dupes = my_objects[items[0]].intersection(my_objects[items[1]])
+    #
+    #     for obj in dupes:
+    #         if duplicates.get(obj):
+    #             if items[0] not in duplicates[obj]:
+    #                 duplicates[obj].append(items[0])
+    #             if items[1] not in duplicates[obj]:
+    #                 duplicates[obj].append(items[1])
+    #         else:
+    #             duplicates[obj] = list(items)
+    for items in combinations(my_objects, r=2):
+        for obj in my_objects[items[0]]:
+            for obj2 in my_objects[items[1]]:
+                if obj["@name"] == obj2["@name"]:
+                    if duplicates.get(obj["@name"]):
+                        if items[0] not in duplicates[obj["@name"]]:
+                            duplicates[obj["@name"]].append(items[0])
+                        if items[1] not in duplicates[obj["@name"]]:
+                            duplicates[obj["@name"]].append(items[1])
+                    else:
+                        duplicates[obj["@name"]] = list(items)
     return duplicates
 
 
