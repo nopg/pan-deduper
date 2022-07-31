@@ -418,28 +418,33 @@ def find_duplicates_deep(my_objects):
         N/A
     """
     duplicates = {}
-    # for items in combinations(my_objects, r=2):
-    #     dupes = my_objects[items[0]].intersection(my_objects[items[1]])
-    #
-    #     for obj in dupes:
-    #         if duplicates.get(obj):
-    #             if items[0] not in duplicates[obj]:
-    #                 duplicates[obj].append(items[0])
-    #             if items[1] not in duplicates[obj]:
-    #                 duplicates[obj].append(items[1])
-    #         else:
-    #             duplicates[obj] = list(items)
     for items in combinations(my_objects, r=2):
         for obj in my_objects[items[0]]:
             for obj2 in my_objects[items[1]]:
                 if obj["@name"] == obj2["@name"]:
-                    if duplicates.get(obj["@name"]):
-                        if items[0] not in duplicates[obj["@name"]]:
-                            duplicates[obj["@name"]].append(items[0])
-                        if items[1] not in duplicates[obj["@name"]]:
-                            duplicates[obj["@name"]].append(items[1])
+                    for key in ("@device-group", "@loc", "@location"):
+                        if obj.get(key):
+                            obj.pop(key)
+                        if obj2.get(key):
+                            obj2.pop(key)
+
+                    if obj == obj2:
+                        if duplicates.get(obj["@name"]):
+                            if items[0] not in duplicates[obj["@name"]]:
+                                duplicates[obj["@name"]].append(items[0])
+                            if items[1] not in duplicates[obj["@name"]]:
+                                duplicates[obj["@name"]].append(items[1])
+                        else:
+                            duplicates[obj["@name"]] = list(items)
                     else:
-                        duplicates[obj["@name"]] = list(items)
+                        print("Deep check found same name but different values:")
+                        print(f"\n{obj['@name']}\n")
+                        pprint(obj)
+                        print("\n\n")
+                        print(f"\n{obj2['@name']}\n")
+                        pprint(obj2)
+                        print("\n\n")
+
     return duplicates
 
 

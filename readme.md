@@ -32,7 +32,7 @@ Grab objects from .xml file:
 
 TODO:
 
-deep checker tests & xml support?
+deep checker tests & xml support? pop the name
 
 break testing in many ways\
 tests?!\

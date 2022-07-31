@@ -22,6 +22,11 @@ if platform.system() == "Windows":
 def xml(
     filename: Optional[str] = typer.Option(
         None, "--filename", "-f", prompt="XML FIlename: ",
+    ),
+    deep: bool = typer.Option(
+        None,
+        "--deep",
+        "-d",
     )
 
 ):
@@ -35,7 +40,7 @@ def xml(
         print("\nFile open failed...typo?\n")
         sys.exit(1)
 
-    asyncio.run(run_deduper(configstr=configstr))
+    asyncio.run(run_deduper(configstr=configstr, deep=deep))
 
 
 @app.command("panorama", help="Gather objects/services via Panorama")
