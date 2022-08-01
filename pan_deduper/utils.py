@@ -462,6 +462,53 @@ def find_duplicates_deep(my_objects):
     return duplicates, diffs
 
 
+def find_duplicates_deep_xml(my_objects):
+    """
+    Finds the duplicate objects (multiple device groups contain the object)
+
+    Args:
+     my_objects: list of objects to search through
+    Returns:
+        duplicates: Dict of duplicate object names containing list of device-groups]
+    Raises:
+        N/A
+    """
+    duplicates = {}
+    diffs = []
+    for items in combinations(my_objects, r=2):
+        for obj in my_objects[items[0]]:
+            for obj2 in my_objects[items[1]]:
+                # funky blah to be betterized
+                if obj["@name"] == obj2["@name"]:
+                    if obj.get("@device-group"):
+                        dg = obj.pop("@device-group")
+                    if obj2.get("@device-group"):
+                        dg2 = obj2.pop("@device-group")
+                    for key in ("@loc", "@location"):
+                        if obj.get(key):
+                            obj.pop(key)
+                        if obj2.get(key):
+                            obj2.pop(key)
+                    diff = DeepDiff(obj, obj2, ignore_order=True)
+                    if not diff:
+                        if duplicates.get(obj["@name"]):
+                            if items[0] not in duplicates[obj["@name"]]:
+                                duplicates[obj["@name"]].append(items[0])
+                            if items[1] not in duplicates[obj["@name"]]:
+                                duplicates[obj["@name"]].append(items[1])
+                        else:
+                            duplicates[obj["@name"]] = list(items)
+                    else:
+                        # weirdness required due to json.dumps("@blah"), to be betterized
+                        temp = {"@device-group": dg}
+                        temp2 = {"@device-group": dg2}
+                        temp.update(obj)
+                        temp2.update(obj2)
+                        diffs.append([temp, temp2])
+                        print(f"Deep check found: in {temp['@name']} in {temp['@device-group']} and {temp2['@name']} in {temp2['@device-group']}")
+    return duplicates, diffs
+
+
 def find_duplicates_shared(shared_objs, dupes):
 
     shared_duplicates = {}
