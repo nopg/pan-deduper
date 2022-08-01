@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 from lxml import etree
 from lxml.etree import XMLSyntaxError
 from rich.pretty import pprint
+from deepdiff import DeepDiff
 
 from pan_deduper.panorama_api import Panorama_api
 
@@ -96,10 +97,11 @@ async def run_deduper(
 
     print("\n\tDe-duplicating...\n")
     results = {}
+    diffs = {}
     for object_type in settings.to_dedupe:
         results[object_type] = {}
         if deep:
-            duplicates = find_duplicates_deep(my_objs[object_type])
+            duplicates, diffs[object_type] = find_duplicates_deep(my_objs[object_type])
         else:
             duplicates = find_duplicates(my_objs[object_type])
 
@@ -108,7 +110,7 @@ async def run_deduper(
             if len(dgs) >= settings.minimum_duplicates:
                 results[object_type].update({dupe: dgs})
 
-    write_output(results)
+    write_output("duplicates", results)
     print("\nDuplicates found: \n")
 
     length = 0
@@ -116,9 +118,13 @@ async def run_deduper(
     if length == 0:
         print("\nNone!")
     else:
-        pprint(results)
         pprint(f"{length} objects found in total.")
-
+        if length > 10:
+            yesno = ""
+            while yesno not in ("y", "n", "yes", "no"):
+                yesno = input("Print them all? (y/n)")
+            if yesno in ("yes", "y"):
+                pprint(results)
         if settings.push_to_panorama and not configstr:
             yesno = ""
             while yesno not in ("y", "n", "yes", "no"):
@@ -128,7 +134,10 @@ async def run_deduper(
             if yesno in ("yes", "y"):
                 await push_to_panorama(pan=pan, results=results)
 
-    print("\n\tDone! Output above also saved in duplicates.json.\n")
+    if deep:
+        write_output("diffs", diffs)
+        print("\n\tAlmost-Maybe duplicates found are saved in diffs.json")
+    print("\n\tDone! Results(duplicate list) also saved in duplicates.json.\n")
     logger.info("Done.")
 
 
@@ -418,17 +427,23 @@ def find_duplicates_deep(my_objects):
         N/A
     """
     duplicates = {}
+    diffs = []
     for items in combinations(my_objects, r=2):
         for obj in my_objects[items[0]]:
             for obj2 in my_objects[items[1]]:
+                # funky blah to be betterized
                 if obj["@name"] == obj2["@name"]:
-                    for key in ("@device-group", "@loc", "@location"):
+                    if obj.get("@device-group"):
+                        dg = obj.pop("@device-group")
+                    if obj2.get("@device-group"):
+                        dg2 = obj2.pop("@device-group")
+                    for key in ("@loc", "@location"):
                         if obj.get(key):
                             obj.pop(key)
                         if obj2.get(key):
                             obj2.pop(key)
-
-                    if obj == obj2:
+                    diff = DeepDiff(obj, obj2, ignore_order=True)
+                    if not diff:
                         if duplicates.get(obj["@name"]):
                             if items[0] not in duplicates[obj["@name"]]:
                                 duplicates[obj["@name"]].append(items[0])
@@ -437,15 +452,14 @@ def find_duplicates_deep(my_objects):
                         else:
                             duplicates[obj["@name"]] = list(items)
                     else:
-                        print("Deep check found same name but different values:")
-                        print(f"\n{obj['@name']}\n")
-                        pprint(obj)
-                        print("\n\n")
-                        print(f"\n{obj2['@name']}\n")
-                        pprint(obj2)
-                        print("\n\n")
-
-    return duplicates
+                        # weirdness required due to json.dumps("@blah"), to be betterized
+                        temp = {"@device-group": dg}
+                        temp2 = {"@device-group": dg2}
+                        temp.update(obj)
+                        temp2.update(obj2)
+                        diffs.append([temp, temp2])
+                        print(f"Deep check found: in {temp['@name']} in {temp['@device-group']} and {temp2['@name']} in {temp2['@device-group']}")
+    return duplicates, diffs
 
 
 def find_duplicates_shared(shared_objs, dupes):
@@ -543,20 +557,27 @@ async def do_the_deletes_shared(
     await asyncio.gather(*coroutines)
 
 
-def write_output(results):
+def write_output(filename, results):
     """
     Write json string to file
 
     Args:
+        filename: you get one guess
         results: dictionary of duplicate results
     Returns:
          N/A
     Raises:
         N/A
     """
-    # Write output to file
-    json_str = json.dumps(results, indent=4)
 
+    class SetEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, set):
+                return list(obj)
+            return json.JSONEncoder.default(self, obj)
+
+    # Write output to file
+    json_str = json.dumps(results, indent=4, cls=SetEncoder, sort_keys=True)
     dt = datetime.now().strftime("%Y-%m-%d::%H:%M:%S")
-    with open(f"duplicates-{dt}.json", "w") as fout:
+    with open(f"{filename}-{dt}.json", "w") as fout:
         fout.write(json_str)

@@ -8,10 +8,11 @@ Have fun!
 
 ## Installation
 To install run:
+(substitue python/pip with python3/pip3 if required on your system)
 
 - `python -m venv myenv` <-- you should always create a virtual environment
 - `source myenv/bin/activate` <-- and activate it
-- `pip install git+https://github.com/glspi/pan-deduper.git`
+- `python -m pip install git+https://github.com/glspi/pan-deduper.git`
 
 A 'settings.py' file is used for 'settings' (shocking huh?)
 just run 'deduper' and it will be automatically created for you. Review the existing
@@ -33,6 +34,8 @@ Grab objects from .xml file:
 TODO:
 
 deep checker tests & xml support? pop the name
+pull DG hierarchy and update
+xml deepdupe
 
 break testing in many ways\
 tests?!\

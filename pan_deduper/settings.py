@@ -1,7 +1,7 @@
 """
 Variables to be updated by end-user on each run
 """
-push_to_panorama = True  # Duh
+push_to_panorama = False  # Duh
 delete_shared_objects = True  # Delete shared after cleanup/deduplicaton?
 device_groups = []  # Leave empty if searching ALL device groups
 exclude_device_groups = []  # Leave empty if searching ALL device groups
