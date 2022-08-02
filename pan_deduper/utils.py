@@ -490,7 +490,7 @@ def find_duplicates_deep(my_objects, xml: Union[None, str]):
                         dupe_obj2 = obj2
 
                     # Don't need these keys, will cause dupe checking issues too
-                    for key in ("@loc", "@location", "@device-group"):
+                    for key in ("@loc", "@location", "@device-group", "@overrides"):
                         if dupe_obj1.get(key):
                             dupe_obj1.pop(key)
                         if dupe_obj2.get(key):
