@@ -5,6 +5,7 @@ lint:
 	python -m pydocstyle .
 	#python -m mypy --strict --no-warn-return-any pan_deduper/
 clean:
-	rm duplicates-*
+	rm duplicates-*.json
 	rm settings.py
 	rm deduper.log
+	rm deep-dupes-*.json

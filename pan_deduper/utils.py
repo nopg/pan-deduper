@@ -9,10 +9,10 @@ from itertools import combinations
 from typing import Any, Dict, List
 
 import xmltodict
+from deepdiff import DeepDiff
 from lxml import etree
 from lxml.etree import XMLSyntaxError
 from rich.pretty import pprint
-from deepdiff import DeepDiff
 
 from pan_deduper.panorama_api import Panorama_api
 
@@ -61,7 +61,7 @@ async def run_deduper(
     panorama: str = None,
     username: str = None,
     password: str = None,
-    deep: bool = False
+    deep: bool = False,
 ) -> None:
     """
     Main program - BEGIN!
@@ -104,9 +104,12 @@ async def run_deduper(
         results[object_type] = {}
         if deep:
             if configstr:
-                duplicates, deep_dupes[object_type] = find_duplicates_deep_xml(objs)
+                xml = True
             else:
-                duplicates, deep_dupes[object_type] = find_duplicates_deep(objs)
+                xml = False
+            duplicates, deep_dupes[object_type] = find_duplicates_deep(
+                my_objects=objs, xml=xml
+            )
         else:
             duplicates = find_duplicates(objs)
 
@@ -167,6 +170,11 @@ async def push_to_panorama(pan, results) -> None:
     Raises:
         N/A
     """
+    if not settings.new_parent_device_group:
+        print("\n\nYou didn't give me a parent device group to add objects to!!")
+        print("Check settings.py\n\n")
+        sys.exit(1)
+
     print("\nBeginning push..")
     print("Getting full objects...\n")
     # Get full objects so we can create them elsewhere
@@ -338,7 +346,7 @@ def format_objs(objs, dg, names_only):
             if dg == "shared":
                 obj_name = name["@name"]
             else:
-                if name["@loc"] not in settings.parent_device_group:
+                if name["@loc"] not in settings.new_parent_device_group:
                     obj_name = name["@name"]
             formatted_objs.append(obj_name)
 
@@ -347,7 +355,7 @@ def format_objs(objs, dg, names_only):
     return formatted_objs
 
 
-async def get_objects_xml(configstr, deep = None):
+async def get_objects_xml(configstr, deep=None):
     """
     Get objects from xml file instead of Panorama
 
@@ -426,12 +434,13 @@ def find_duplicates(my_objects):
     return duplicates
 
 
-def find_duplicates_deep(my_objects):
+def find_duplicates_deep(my_objects, xml=False):
     """
     Finds the duplicate objects (multiple device groups contain the object)
 
     Args:
-     my_objects: list of objects to search through
+        my_objects: list of objects to search through
+        xml: are we parsing xml or not?
     Returns:
         duplicates: Dict of duplicate object names containing list of device-groups]
     Raises:
@@ -439,94 +448,50 @@ def find_duplicates_deep(my_objects):
     """
     duplicates = {}
     diffs = []
+    nametag = "name" if xml else "@name"
     for items in combinations(my_objects, r=2):
-        dg = items[0]
+        dg1 = items[0]
         dg2 = items[1]
-        for obj in my_objects[items[0]]:
-            for obj2 in my_objects[items[1]]:
-                # funky blah to be betterized
-                if obj["@name"] == obj2["@name"]:
-                    if obj.get("@device-group"):
-                        dg = obj.pop("@device-group")
-                    if obj2.get("@device-group"):
-                        dg2 = obj2.pop("@device-group")
-                    for key in ("@loc", "@location"):
-                        if obj.get(key):
-                            obj.pop(key)
-                        if obj2.get(key):
-                            obj2.pop(key)
-                    diff = DeepDiff(obj, obj2, ignore_order=True)
+        for obj1 in my_objects[dg1]:
+            for obj2 in my_objects[dg2]:
+                # We are now comparing two lists of objects
+                if obj1.get(nametag) == obj2.get(nametag):
+                    dupe_name = obj1.get(nametag)
+                    if xml:  # Convert to Dict so we can use Deep Diff
+                        dupe_obj1 = xmltodict.parse(etree.tostring(obj1))["entry"]
+                        dupe_obj2 = xmltodict.parse(etree.tostring(obj2))["entry"]
+                    else:
+                        dupe_obj1 = obj1
+                        dupe_obj2 = obj2
+
+                    # Don't need these keys, will cause dupe checking issues too
+                    for key in ("@loc", "@location", "@device-group"):
+                        if dupe_obj1.get(key):
+                            dupe_obj1.pop(key)
+                        if dupe_obj2.get(key):
+                            dupe_obj2.pop(key)
+
+                    # Deep Diff!
+                    diff = DeepDiff(dupe_obj1, dupe_obj2, ignore_order=True)
                     if not diff:
-                        if duplicates.get(obj["@name"]):
-                            if items[0] not in duplicates[obj["@name"]]:
-                                duplicates[obj["@name"]].append(items[0])
-                            if items[1] not in duplicates[obj["@name"]]:
-                                duplicates[obj["@name"]].append(items[1])
+                        # We have a dupe! Add the dupe & device-groups to our list
+                        if duplicates.get(dupe_name):
+                            if dg1 not in duplicates[dupe_name]:
+                                duplicates[dupe_name].append(dg1)
+                            if dg2 not in duplicates[dupe_name]:
+                                duplicates[dupe_name].append(dg2)
                         else:
-                            duplicates[obj["@name"]] = list(items)
+                            duplicates[dupe_name] = list(items)
                     else:
                         # weirdness required due to json.dumps("@blah"), to be betterized
-                        temp = {"@device-group": dg}
+                        temp1 = {"@device-group": dg1}
                         temp2 = {"@device-group": dg2}
-                        temp.update(obj)
-                        temp2.update(obj2)
-                        diffs.append([temp, temp2])
-                        print(f"Deep check found: in {temp['@name']} in {temp['@device-group']} and {temp2['@name']} in {temp2['@device-group']}")
-    return duplicates, diffs
-
-
-def find_duplicates_deep_xml(my_objects):
-    """
-    Finds the duplicate objects (multiple device groups contain the object)
-
-    Args:
-     my_objects: list of objects to search through
-    Returns:
-        duplicates: Dict of duplicate object names containing list of device-groups]
-    Raises:
-        N/A
-    """
-    duplicates = {}
-    diffs = []
-    for items in combinations(my_objects, r=2):
-        dg = items[0]
-        dg2 = items[1]
-        for obj in my_objects[items[0]]:
-            for obj2 in my_objects[items[1]]:
-                if obj.get("name") == obj2.get("name"):
-                    myname = obj.get('name')
-                    to = xmltodict.parse(etree.tostring(obj))
-                    to2 = xmltodict.parse(etree.tostring(obj2))
-                    o = to['entry']
-                    o2 = to2['entry']
-                    if o.get("@device-group"):
-                        dg = o.pop("@device-group")
-                    if o2.get("@device-group"):
-                        dg2 = o2.pop("@device-group")
-                    for key in ("@loc", "@location"):
-                        if o.get(key):
-                            o.pop(key)
-                        if o2.get(key):
-                            o2.pop(key)
-                    diff = DeepDiff(o, o2, ignore_order=True)
-                    if not diff:
-                        if duplicates.get(myname):
-                            if items[0] not in duplicates[myname]:
-                                duplicates[myname].append(items[0])
-                            if items[1] not in duplicates[myname]:
-                                duplicates[myname].append(items[1])
-                        else:
-                            duplicates[myname] = list(items)
-                    else:
-                        # make better!
-                        temp = {"@device-group": items[0]}
-                        temp2 = {"@device-group": items[1]}
-                        temp.update(o)
-                        temp2.update(o2)
-                        diffs.append([temp, temp2])
+                        temp1.update(dupe_obj1)
+                        temp2.update(dupe_obj2)
+                        diffs.append([temp1, temp2])
                         print(
-                            f"Deep check found: in {temp['@name']} in {temp['@device-group']} and {temp2['@name']} in {temp2['@device-group']}")
-
+                            f"Deep check found {temp1.get('@name')} in {temp1.get('@device-group')} and {temp2.get('@name')} in {temp2.get('@device-group')}"
+                        )
     return duplicates, diffs
 
 
@@ -579,7 +544,9 @@ async def do_the_creates(
                 dupe_obj = find_object(
                     objs_list=objs_list,
                     object_type=object_type,
-                    device_group=device_groups[0],  # just grab the object from the 1st dg
+                    device_group=device_groups[
+                        0
+                    ],  # just grab the object from the 1st dg
                     name=dupe,
                 )
 
@@ -588,7 +555,7 @@ async def do_the_creates(
                     pan.create_object(
                         object_type=object_type,
                         obj=dupe_obj,
-                        device_group=settings.parent_device_group,
+                        device_group=settings.new_parent_device_group,
                     )
                 )
 

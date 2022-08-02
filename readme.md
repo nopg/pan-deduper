@@ -33,12 +33,10 @@ Grab objects from .xml file:
 
 TODO:
 
-deep checker tests & xml support? pop the name
 pull DG hierarchy and update
-xml deepdupe
 
 break testing in many ways\
-tests?!\
+tests!!
 
 notes about ["@loc"] not in settings.exclude_device_groups---parent?\
 make httpx timeout even longer?(and on httpx.client)

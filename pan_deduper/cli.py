@@ -21,14 +21,16 @@ if platform.system() == "Windows":
 @app.command("xml", help="Gather objects/services via XML")
 def xml(
     filename: Optional[str] = typer.Option(
-        None, "--filename", "-f", prompt="XML FIlename: ",
+        None,
+        "--filename",
+        "-f",
+        prompt="XML FIlename: ",
     ),
     deep: bool = typer.Option(
         None,
         "--deep",
         "-d",
-    )
-
+    ),
 ):
     print("\n\tXML Time!\n")
 
@@ -67,10 +69,14 @@ def panorama(
         None,
         "--deep",
         "-d",
-    )
+    ),
 ):
     print("\n\tPanorama Time!\n")
-    asyncio.run(run_deduper(panorama=panorama_ip, username=username, password=password, deep=deep))
+    asyncio.run(
+        run_deduper(
+            panorama=panorama_ip, username=username, password=password, deep=deep
+        )
+    )
 
 
 if __name__ == "__main__":
