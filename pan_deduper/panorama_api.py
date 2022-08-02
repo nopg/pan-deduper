@@ -43,10 +43,11 @@ class Panorama_api:
         Raises: ?
         """
         sess = httpx.AsyncClient(verify=False)  # Disable certificate verification
-        url = f"https://{self.panorama}/api/?type=keygen&user={self.username}&password={self.password}"
+        params = {"type": "keygen", "user": self.username, "password": self.password}
+        url = f"https://{self.panorama}/api/"
 
         try:
-            response = await sess.get(url=url)
+            response = await sess.get(url=url, params=params)
         except httpx.RequestError as e:
             print(f"{url=}")
             print("Request error: ", e)
