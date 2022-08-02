@@ -8,6 +8,7 @@ from datetime import datetime
 from itertools import combinations
 from typing import Any, Dict, List
 
+import xmltodict
 from lxml import etree
 from lxml.etree import XMLSyntaxError
 from rich.pretty import pprint
@@ -97,13 +98,17 @@ async def run_deduper(
 
     print("\n\tDe-duplicating...\n")
     results = {}
-    diffs = {}
+    deep_dupes = {}
     for object_type in settings.to_dedupe:
+        objs = my_objs[object_type]
         results[object_type] = {}
         if deep:
-            duplicates, diffs[object_type] = find_duplicates_deep(my_objs[object_type])
+            if configstr:
+                duplicates, deep_dupes[object_type] = find_duplicates_deep_xml(objs)
+            else:
+                duplicates, deep_dupes[object_type] = find_duplicates_deep(objs)
         else:
-            duplicates = find_duplicates(my_objs[object_type])
+            duplicates = find_duplicates(objs)
 
         # Only duplicates that meet 'minimum' count
         for dupe, dgs in duplicates.items():
@@ -115,10 +120,16 @@ async def run_deduper(
 
     length = 0
     length += sum([len(v) for k, v in results.items()])
+    dgs = 0
+    for k, v in results.items():
+        for k, v in v.items():
+            dgs += len(v)
+
     if length == 0:
         print("\nNone!")
     else:
         pprint(f"{length} objects found in total.")
+        pprint(f"{dgs} object changes.")
         if length > 10:
             yesno = ""
             while yesno not in ("y", "n", "yes", "no"):
@@ -135,8 +146,8 @@ async def run_deduper(
                 await push_to_panorama(pan=pan, results=results)
 
     if deep:
-        write_output("diffs", diffs)
-        print("\n\tAlmost-Maybe duplicates found are saved in diffs.json")
+        write_output("deep-dupes", deep_dupes)
+        print("\n\tAlmost/Maybe duplicates found are saved in deep-dupes.json")
     print("\n\tDone! Results(duplicate list) also saved in duplicates.json.\n")
     logger.info("Done.")
 
@@ -364,13 +375,13 @@ async def get_objects_xml(configstr, deep = None):
         for dg in settings.device_groups:
             object_xpath = None
             if object_type == "addresses":
-                object_xpath = f"//devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/address/entry"
+                object_xpath = f"./devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/address/entry"
             if object_type == "address-groups":
-                object_xpath = f"//devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/address-group/entry"
+                object_xpath = f"./devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/address-group/entry"
             if object_type == "services":
-                object_xpath = f"//devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/service/entry"
+                object_xpath = f"./devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/service/entry"
             if object_type == "service-groups":
-                object_xpath = f"//devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/service-group/entry"
+                object_xpath = f"./devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/service-group/entry"
 
             # Get object
             objs = config.xpath(object_xpath)
@@ -429,6 +440,8 @@ def find_duplicates_deep(my_objects):
     duplicates = {}
     diffs = []
     for items in combinations(my_objects, r=2):
+        dg = items[0]
+        dg2 = items[1]
         for obj in my_objects[items[0]]:
             for obj2 in my_objects[items[1]]:
                 # funky blah to be betterized
@@ -476,36 +489,44 @@ def find_duplicates_deep_xml(my_objects):
     duplicates = {}
     diffs = []
     for items in combinations(my_objects, r=2):
+        dg = items[0]
+        dg2 = items[1]
         for obj in my_objects[items[0]]:
             for obj2 in my_objects[items[1]]:
-                # funky blah to be betterized
-                if obj["@name"] == obj2["@name"]:
-                    if obj.get("@device-group"):
-                        dg = obj.pop("@device-group")
-                    if obj2.get("@device-group"):
-                        dg2 = obj2.pop("@device-group")
+                if obj.get("name") == obj2.get("name"):
+                    myname = obj.get('name')
+                    to = xmltodict.parse(etree.tostring(obj))
+                    to2 = xmltodict.parse(etree.tostring(obj2))
+                    o = to['entry']
+                    o2 = to2['entry']
+                    if o.get("@device-group"):
+                        dg = o.pop("@device-group")
+                    if o2.get("@device-group"):
+                        dg2 = o2.pop("@device-group")
                     for key in ("@loc", "@location"):
-                        if obj.get(key):
-                            obj.pop(key)
-                        if obj2.get(key):
-                            obj2.pop(key)
-                    diff = DeepDiff(obj, obj2, ignore_order=True)
+                        if o.get(key):
+                            o.pop(key)
+                        if o2.get(key):
+                            o2.pop(key)
+                    diff = DeepDiff(o, o2, ignore_order=True)
                     if not diff:
-                        if duplicates.get(obj["@name"]):
-                            if items[0] not in duplicates[obj["@name"]]:
-                                duplicates[obj["@name"]].append(items[0])
-                            if items[1] not in duplicates[obj["@name"]]:
-                                duplicates[obj["@name"]].append(items[1])
+                        if duplicates.get(myname):
+                            if items[0] not in duplicates[myname]:
+                                duplicates[myname].append(items[0])
+                            if items[1] not in duplicates[myname]:
+                                duplicates[myname].append(items[1])
                         else:
-                            duplicates[obj["@name"]] = list(items)
+                            duplicates[myname] = list(items)
                     else:
-                        # weirdness required due to json.dumps("@blah"), to be betterized
-                        temp = {"@device-group": dg}
-                        temp2 = {"@device-group": dg2}
-                        temp.update(obj)
-                        temp2.update(obj2)
+                        # make better!
+                        temp = {"@device-group": items[0]}
+                        temp2 = {"@device-group": items[1]}
+                        temp.update(o)
+                        temp2.update(o2)
                         diffs.append([temp, temp2])
-                        print(f"Deep check found: in {temp['@name']} in {temp['@device-group']} and {temp2['@name']} in {temp2['@device-group']}")
+                        print(
+                            f"Deep check found: in {temp['@name']} in {temp['@device-group']} and {temp2['@name']} in {temp2['@device-group']}")
+
     return duplicates, diffs
 
 
@@ -517,7 +538,7 @@ def find_duplicates_shared(shared_objs, dupes):
         for obj_name in dupes[object_type]:
             # print(f"{obj_name=}\t {shared_objs[object_type]['shared']}")
             if obj_name in shared_objs[object_type]["shared"]:
-                print(f"found dupe in shared: {obj_name}")
+                print(f"Found duplicate in shared: {obj_name}")
                 shared_duplicates[object_type].append(obj_name)
 
     return shared_duplicates
