@@ -33,10 +33,9 @@ Grab objects from .xml file:
 
 TODO:
 
-pull DG hierarchy and update
-
+DG hierarchy?\
 break testing in many ways\
-tests!!
-
+tests!!\
 notes about ["@loc"] not in settings.exclude_device_groups---parent?\
-make httpx timeout even longer?(and on httpx.client)
+make httpx timeout even longer?(and on httpx.client)\
+logging on 'gets'

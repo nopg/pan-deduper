@@ -1,3 +1,4 @@
+"""pan_deduper.utils"""
 import asyncio
 import importlib.resources as pkg_resources
 import importlib.util
@@ -6,7 +7,7 @@ import logging
 import sys
 from datetime import datetime
 from itertools import combinations
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 import xmltodict
 from deepdiff import DeepDiff
@@ -44,7 +45,7 @@ except (FileNotFoundError, ImportError, ModuleNotFoundError):
     print("------------------------------------")
     settingsfile = pkg_resources.read_text("pan_deduper", "settings.py")
     try:
-        with open("settings.py", "w") as f:
+        with open("settings.py", "w", encoding="utf8") as f:
             f.write(settingsfile)
     except IOError as e:
         print("Error creating settings.py in local directory, permissions issue?")
@@ -71,11 +72,6 @@ async def run_deduper(
         panorama:   panorama IP/FQDN
         username:   panorama username
         password:   panorama password
-    Returns:
-        N/A
-
-    Raises:
-        N/A
     """
     logger.info("")
     logger.info("----Running deduper---")
@@ -99,47 +95,52 @@ async def run_deduper(
     print("\n\tDe-duplicating...\n")
     results = {}
     deep_dupes = {}
-    for object_type in settings.to_dedupe:
+    for object_type in settings.TO_DEDUPE:
         objs = my_objs[object_type]
         results[object_type] = {}
         if deep:
-            if configstr:
-                xml = True
-            else:
-                xml = False
             duplicates, deep_dupes[object_type] = find_duplicates_deep(
-                my_objects=objs, xml=xml
+                my_objects=objs, xml=configstr
             )
         else:
-            duplicates = find_duplicates(objs)
+            duplicates = find_duplicates(my_objects=objs)
 
         # Only duplicates that meet 'minimum' count
         for dupe, dgs in duplicates.items():
-            if len(dgs) >= settings.minimum_duplicates:
-                results[object_type].update({dupe: dgs})
+            if dupe:
+                if len(dgs) >= settings.MINIMUM_DUPLICATES:
+                    results[object_type].update({dupe: dgs})
+
+    if deep:
+        write_output("deep-dupes", deep_dupes)
+        print(
+            "\n\tAlmost/Maybe duplicates found with deep check are saved in deep-dupes.json"
+        )
 
     write_output("duplicates", results)
     print("\nDuplicates found: \n")
 
     length = 0
     length += sum([len(v) for k, v in results.items()])
-    dgs = 0
-    for k, v in results.items():
-        for k, v in v.items():
-            dgs += len(v)
+    changes = 0
+    for _, obj_type in results.items():
+        for _, device_groups in obj_type.items():
+            changes += len(device_groups)
 
     if length == 0:
         print("\nNone!")
     else:
         pprint(f"{length} objects found in total.")
-        pprint(f"{dgs} object changes.")
-        if length > 10:
+        pprint(f"{changes} object changes.")
+        if changes <= 20:
+            pprint(results)
+        else:
             yesno = ""
             while yesno not in ("y", "n", "yes", "no"):
                 yesno = input("Print them all? (y/n)")
             if yesno in ("yes", "y"):
                 pprint(results)
-        if settings.push_to_panorama and not configstr:
+        if settings.PUSH_TO_PANORAMA and not configstr:
             yesno = ""
             while yesno not in ("y", "n", "yes", "no"):
                 yesno = input(
@@ -148,9 +149,6 @@ async def run_deduper(
             if yesno in ("yes", "y"):
                 await push_to_panorama(pan=pan, results=results)
 
-    if deep:
-        write_output("deep-dupes", deep_dupes)
-        print("\n\tAlmost/Maybe duplicates found are saved in deep-dupes.json")
     print("\n\tDone! Results(duplicate list) also saved in duplicates.json.\n")
     logger.info("Done.")
 
@@ -170,7 +168,7 @@ async def push_to_panorama(pan, results) -> None:
     Raises:
         N/A
     """
-    if not settings.new_parent_device_group:
+    if not settings.NEW_PARENT_DEVICE_GROUP:
         print("\n\nYou didn't give me a parent device group to add objects to!!")
         print("Check settings.py\n\n")
         sys.exit(1)
@@ -211,7 +209,7 @@ async def push_to_panorama(pan, results) -> None:
     )
 
     # Now lets delete shared (to delete!!)
-    if settings.delete_shared_objects:
+    if settings.DELETE_SHARED_OBJECTS:
         yesno = ""
         while yesno not in ("y", "n", "yes", "no"):
             yesno = input("All cleaned up...cleanup 'shared' also? (y/n): ")
@@ -225,15 +223,20 @@ async def push_to_panorama(pan, results) -> None:
                 shared_objs=shared_objs, dupes=results
             )
 
-            print("Deleting from 'shared'...")
-            await do_the_deletes_shared(
-                object_types=["address-groups", "service-groups"],
-                pan=pan,
-                objects=shared_deletes,
-            )
-            await do_the_deletes_shared(
-                object_types=["addresses", "services"], pan=pan, objects=shared_deletes
-            )
+            if not shared_deletes:
+                print("\tNothing to delete")
+            else:
+                print("Deleting from 'shared'...")
+                await do_the_deletes_shared(
+                    object_types=["address-groups", "service-groups"],
+                    pan=pan,
+                    objects=shared_deletes,
+                )
+                await do_the_deletes_shared(
+                    object_types=["addresses", "services"],
+                    pan=pan,
+                    objects=shared_deletes,
+                )
 
     return None
 
@@ -252,23 +255,23 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None):
          N/A
     """
     if config is not None:
-        if not settings.device_groups:
+        if not settings.DEVICE_GROUPS:
             dgs = config.find(
                 "devices/entry[@name='localhost.localdomain']/device-group"
             )
             for entry in dgs.getchildren():
-                settings.device_groups.append(entry.get("name"))
+                settings.DEVICE_GROUPS.append(entry.get("name"))
     else:
-        if not settings.device_groups:
-            settings.device_groups = await pan.get_device_groups()
+        if not settings.DEVICE_GROUPS:
+            settings.DEVICE_GROUPS = await pan.get_device_groups()
 
-    if settings.exclude_device_groups:
-        for dg in settings.exclude_device_groups:
-            if dg in settings.device_groups:
-                settings.device_groups.remove(dg)
+    if settings.EXCLUDE_DEVICE_GROUPS:
+        for dg in settings.EXCLUDE_DEVICE_GROUPS:
+            if dg in settings.DEVICE_GROUPS:
+                settings.DEVICE_GROUPS.remove(dg)
 
-    print(f"\nComparing these DEVICE GROUPS:\n{settings.device_groups}")
-    print(f"\nand these OBJECT TYPES:\n{settings.to_dedupe}\n")
+    print(f"\nComparing these DEVICE GROUPS:\n{settings.DEVICE_GROUPS}")
+    print(f"\nand these OBJECT TYPES:\n{settings.TO_DEDUPE}\n")
 
 
 async def get_objects_panorama(
@@ -283,14 +286,12 @@ async def get_objects_panorama(
         shared: pull from shared (to delete!)
     Returns:
          Dict/List of objects
-    Raises:
-        N/A
     """
 
     # Get objects
     coroutines = [
         _get_objects_panorama(pan, object_type, names_only, shared)
-        for object_type in settings.to_dedupe
+        for object_type in settings.TO_DEDUPE
     ]
     my_objs_temp = await asyncio.gather(*coroutines)
 
@@ -319,7 +320,7 @@ async def _get_objects_panorama(
                 objs=objs, dg="shared", names_only=names_only
             )
     else:
-        for dg in settings.device_groups:
+        for dg in settings.DEVICE_GROUPS:
             my_objs[object_type][dg] = []
             # Get objects
             params = {"location": "device-group", "device-group": f"{dg}"}
@@ -335,19 +336,39 @@ async def _get_objects_panorama(
     return my_objs
 
 
-def format_objs(objs, dg, names_only):
+def format_objs(objs, dg: str, names_only: bool) -> List:
+    """
+    Format objects before passing on
+
+    Args:
+        objs: objects
+        dg: device group
+        names_only: return values too or just the names
+
+    Returns:
+        List of formatted objects
+    """
     formatted_objs = []
 
     if not names_only:
-        formatted_objs = objs
+        for obj in objs:
+            if obj.get("@loc"):
+                if obj.get("@loc") not in settings.NEW_PARENT_DEVICE_GROUP:
+                    if obj.get("@loc") not in settings.EXCLUDE_DEVICE_GROUPS:
+                        formatted_objs.append(obj)
+
     else:
         for name in objs:
-            obj_name = None
             if dg == "shared":
                 obj_name = name["@name"]
             else:
-                if name["@loc"] not in settings.new_parent_device_group:
-                    obj_name = name["@name"]
+                if name["@loc"] not in settings.NEW_PARENT_DEVICE_GROUP:
+                    if name.get("@loc") not in settings.EXCLUDE_DEVICE_GROUPS:
+                        obj_name = name["@name"]
+                    else:
+                        obj_name = None
+                else:
+                    obj_name = None
             formatted_objs.append(obj_name)
 
         formatted_objs = set(formatted_objs)
@@ -355,12 +376,13 @@ def format_objs(objs, dg, names_only):
     return formatted_objs
 
 
-async def get_objects_xml(configstr, deep=None):
+async def get_objects_xml(configstr, deep=None) -> Dict:
     """
     Get objects from xml file instead of Panorama
 
     Args:
         configstr: xml filename
+        deep: deep search or not
     Returns:
          Dict/list of objects
     Raises:
@@ -378,9 +400,9 @@ async def get_objects_xml(configstr, deep=None):
 
     # Get objects - build into x[type][device-group][name1,name2,...]
     my_objs = {}
-    for object_type in settings.to_dedupe:
+    for object_type in settings.TO_DEDUPE:
         my_objs[object_type] = {}
-        for dg in settings.device_groups:
+        for dg in settings.DEVICE_GROUPS:
             object_xpath = None
             if object_type == "addresses":
                 object_xpath = f"./devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/address/entry"
@@ -420,21 +442,24 @@ def find_duplicates(my_objects):
     """
     duplicates = {}
     for items in combinations(my_objects, r=2):
-        dupes = my_objects[items[0]].intersection(my_objects[items[1]])
+        dg1 = items[0]
+        dg2 = items[1]
+
+        dupes = my_objects[dg1].intersection(my_objects[dg2])
 
         for obj in dupes:
             if duplicates.get(obj):
-                if items[0] not in duplicates[obj]:
-                    duplicates[obj].append(items[0])
-                if items[1] not in duplicates[obj]:
-                    duplicates[obj].append(items[1])
+                if dg1 not in duplicates[obj]:
+                    duplicates[obj].append(dg1)
+                if dg2 not in duplicates[obj]:
+                    duplicates[obj].append(dg2)
             else:
                 duplicates[obj] = list(items)
 
     return duplicates
 
 
-def find_duplicates_deep(my_objects, xml=False):
+def find_duplicates_deep(my_objects, xml: Union[None, str]):
     """
     Finds the duplicate objects (multiple device groups contain the object)
 
@@ -475,13 +500,16 @@ def find_duplicates_deep(my_objects, xml=False):
                     diff = DeepDiff(dupe_obj1, dupe_obj2, ignore_order=True)
                     if not diff:
                         # We have a dupe! Add the dupe & device-groups to our list
-                        if duplicates.get(dupe_name):
-                            if dg1 not in duplicates[dupe_name]:
-                                duplicates[dupe_name].append(dg1)
-                            if dg2 not in duplicates[dupe_name]:
-                                duplicates[dupe_name].append(dg2)
+                        if dupe_name is None:
+                            print("how did this happen??")
                         else:
-                            duplicates[dupe_name] = list(items)
+                            if duplicates.get(dupe_name):
+                                if dg1 not in duplicates[dupe_name]:
+                                    duplicates[dupe_name].append(dg1)
+                                if dg2 not in duplicates[dupe_name]:
+                                    duplicates[dupe_name].append(dg2)
+                            else:
+                                duplicates[dupe_name] = list(items)
                     else:
                         # weirdness required due to json.dumps("@blah"), to be betterized
                         temp1 = {"@device-group": dg1}
@@ -495,7 +523,17 @@ def find_duplicates_deep(my_objects, xml=False):
     return duplicates, diffs
 
 
-def find_duplicates_shared(shared_objs, dupes):
+def find_duplicates_shared(shared_objs, dupes) -> Dict[str, List]:
+    """
+    Find duplicates for shared (it's always separate!)
+
+    Args:
+        shared_objs: shared objects
+        dupes: pre-determined duplicates
+
+    Returns:
+        Dictionary of the duplicates sorted by object type
+    """
 
     shared_duplicates = {}
     for object_type in dupes:
@@ -503,7 +541,7 @@ def find_duplicates_shared(shared_objs, dupes):
         for obj_name in dupes[object_type]:
             # print(f"{obj_name=}\t {shared_objs[object_type]['shared']}")
             if obj_name in shared_objs[object_type]["shared"]:
-                print(f"Found duplicate in shared: {obj_name}")
+                print(f"\n\tFound duplicate in shared: {obj_name}")
                 shared_duplicates[object_type].append(obj_name)
 
     return shared_duplicates
@@ -534,7 +572,17 @@ def find_object(objs_list, object_type, device_group, name):
 
 async def do_the_creates(
     pan: Panorama_api, results: Dict, object_types: List[str], objs_list: Any
-):
+) -> None:
+    """
+    Create the objects
+
+    Args:
+        pan: panorama_api object
+        results: objects (duplicates) to be created (as part of 'move')
+        object_types: object types to be created (used to create objects before groups)
+        objs_list: full object values so that we can clone them
+
+    """
     coroutines = []
     for object_type in object_types:
         if results.get(object_type):
@@ -555,22 +603,33 @@ async def do_the_creates(
                     pan.create_object(
                         object_type=object_type,
                         obj=dupe_obj,
-                        device_group=settings.new_parent_device_group,
+                        device_group=settings.NEW_PARENT_DEVICE_GROUP,
                     )
                 )
 
     await asyncio.gather(*coroutines)
 
 
-async def do_the_deletes(pan: Panorama_api, results: Dict, object_types: List[str]):
+async def do_the_deletes(
+    pan: Panorama_api, results: Dict, object_types: List[str]
+) -> None:
+    """
+    Delete the objects
+
+    Args:
+        pan: panorama_api object
+        results: objects (duplicates) to be deleted
+        object_types: object types to be deleted (used to send groups in before objects)
+
+    """
     coroutines = []
     for object_type in object_types:
         if results.get(object_type):
             for dupe, device_groups in results[object_type].items():
-                for dg in device_groups:
+                for group in device_groups:
                     coroutines.append(
                         pan.delete_object(
-                            object_type=object_type, name=dupe, device_group=dg
+                            object_type=object_type, name=dupe, device_group=group
                         )
                     )
 
@@ -579,7 +638,15 @@ async def do_the_deletes(pan: Panorama_api, results: Dict, object_types: List[st
 
 async def do_the_deletes_shared(
     pan: Panorama_api, objects: Dict, object_types: List[str]
-):
+) -> None:
+    """
+    Delete the shared objects
+
+    Args:
+        pan: panorama_api object
+        objects: objects (duplicates) to be deleted
+        object_types: object types to be deleted (used to send groups in before objects)
+    """
     coroutines = []
     params = {"location": "shared"}
     for object_type in object_types:
@@ -592,17 +659,13 @@ async def do_the_deletes_shared(
     await asyncio.gather(*coroutines)
 
 
-def write_output(filename, results):
+def write_output(filename, output):
     """
     Write json string to file
 
     Args:
         filename: you get one guess
-        results: dictionary of duplicate results
-    Returns:
-         N/A
-    Raises:
-        N/A
+        output: dictionary to be saved
     """
 
     class SetEncoder(json.JSONEncoder):
@@ -612,7 +675,7 @@ def write_output(filename, results):
             return json.JSONEncoder.default(self, obj)
 
     # Write output to file
-    json_str = json.dumps(results, indent=4, cls=SetEncoder, sort_keys=True)
+    json_str = json.dumps(output, indent=4, cls=SetEncoder, sort_keys=True)
     dt = datetime.now().strftime("%Y-%m-%d::%H:%M:%S")
-    with open(f"{filename}-{dt}.json", "w") as fout:
-        fout.write(json_str)
+    with open(f"{filename}-{dt}.json", "w", encoding="utf8") as f:
+        f.write(json_str)

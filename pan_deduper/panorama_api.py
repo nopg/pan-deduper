@@ -1,3 +1,4 @@
+"""pan_deduper.panorama_api"""
 import logging
 import sys
 from typing import Any, Dict
@@ -10,6 +11,8 @@ logger = logging.getLogger("utils")
 
 
 class Panorama_api:
+    """Panorama api"""
+
     def __init__(self, panorama: str, username: str, password: str) -> None:
         """
         Initialize Panorama API Object
@@ -28,7 +31,7 @@ class Panorama_api:
         self.username = username
         self.password = password
         self.base_url = f"https://{panorama}/restapi/{API_VERSION}/"
-        self.APIKEY = ""
+        self.apikey = ""
         self.login_data = {}
 
     async def login(self) -> None:
@@ -57,9 +60,9 @@ class Panorama_api:
         key = xml.find(".//key")
 
         if key is not None:
-            self.APIKEY = key.text
-            self.session[self.APIKEY] = sess
-            self.login_data = {"X-PAN-KEY": self.APIKEY}
+            self.apikey = key.text
+            self.session[self.apikey] = sess
+            self.login_data = {"X-PAN-KEY": self.apikey}
         else:
             print("Unable to retrieve API key...bad credentials?")
             print(f"Response was: {response.text}")
@@ -81,7 +84,7 @@ class Panorama_api:
         headers = self.login_data if not headers else self.login_data.update(headers)
 
         try:
-            response = await self.session[self.APIKEY].get(
+            response = await self.session[self.apikey].get(
                 url=url, headers=headers, params=params
             )
             return response.json()
@@ -112,7 +115,7 @@ class Panorama_api:
         headers = self.login_data if not headers else self.login_data.update(headers)
 
         try:
-            response = await self.session[self.APIKEY].post(
+            response = await self.session[self.apikey].post(
                 url=url, headers=headers, params=params, json=data, timeout=120
             )
             return response.json()
@@ -141,7 +144,7 @@ class Panorama_api:
         headers = self.login_data if not headers else self.login_data.update(headers)
 
         try:
-            response = await self.session[self.APIKEY].delete(
+            response = await self.session[self.apikey].delete(
                 url=url, headers=headers, params=params, timeout=120
             )
             return response.json()
@@ -236,11 +239,11 @@ class Panorama_api:
             device_group = "shared"
             params["name"] = name
 
-        logger.info(f"starting to delete {name}.")
+        # logger.info(f"starting to delete {name}.")
         response = await self.delete_request(url=url, params=params)
 
         if response:
-            if response["@code"] == "20":
+            if response.get("@code") == "20":
                 logger.info(f"Deleted {object_type}:{name} from {device_group}.")
             else:
                 logger.error(
@@ -259,11 +262,9 @@ class Panorama_api:
         Args:
             object_type:
             obj:
-            device_groups:
+            device_group:
         Returns:
              response message (dict)
-        Raises:
-            N/A
         """
         remove_keys = ["@location", "@device-group", "@loc", "@overrides"]
 
@@ -279,10 +280,10 @@ class Panorama_api:
             print(f"Unsupported object_type sent: {object_type}")
             sys.exit(0)
 
-        for dg in device_group:
+        for group in device_group:
             params = {
                 "location": "device-group",
-                "device-group": f"{dg}",
+                "device-group": f"{group}",
                 "name": obj["@name"],
             }
 
@@ -292,21 +293,21 @@ class Panorama_api:
 
             obj = {"entry": obj}
 
-            logger.info(f"starting to create {obj['entry']['@name']}.")
+            # logger.info(f"starting to create {obj['entry']['@name']}.")
             response = await self.post_request(url=url, params=params, data=obj)
 
             if response:
-                if response["@code"] == "20":
+                if response.get("@code") == "20":
                     logger.info(
-                        f"Created {object_type}:{obj['entry']['@name']} in {dg}."
+                        f"Created {object_type}:{obj['entry']['@name']} in {group}."
                     )
                 else:
                     logger.error(
-                        f"Failed to create {object_type}:{obj['entry']['@name']} in {dg}:"
+                        f"Failed to create {object_type}:{obj['entry']['@name']} in {group}:"
                     )
                     logger.error(response["message"])
             else:
                 logger.error(
-                    f"Failed to create {object_type}:{obj['entry']['@name']} in {dg}:"
+                    f"Failed to create {object_type}:{obj['entry']['@name']} in {group}:"
                 )
             return obj

@@ -1,3 +1,4 @@
+"""pan_deduper.cli"""
 import asyncio
 import platform
 import sys
@@ -31,11 +32,18 @@ def xml(
         "--deep",
         "-d",
     ),
-):
+) -> None:
+    """
+    Command Line Entry via XML
+
+    Args:
+        filename: filename.xml
+        deep: deep search into values as well
+    """
     print("\n\tXML Time!\n")
 
     try:
-        with open(filename) as f:
+        with open(filename, encoding="utf8") as f:
             configstr = f.read()
     except OSError as e:
         print(e)
@@ -70,7 +78,16 @@ def panorama(
         "--deep",
         "-d",
     ),
-):
+) -> None:
+    """
+    Command Line Entry via Panorama
+
+    Args:
+        panorama_ip: ip/fqdn of panorama
+        username:
+        password:
+        deep: deep search into values as well
+    """
     print("\n\tPanorama Time!\n")
     asyncio.run(
         run_deduper(
