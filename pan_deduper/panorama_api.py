@@ -6,6 +6,8 @@ from typing import Any, Dict
 import httpx
 from lxml import etree
 
+from pan_deduper import settings
+
 API_VERSION = "v10.1"
 logger = logging.getLogger("utils")
 
@@ -65,8 +67,9 @@ class Panorama_api:
             self.session[self.apikey] = sess
             self.login_data = {"X-PAN-KEY": self.apikey}
         else:
-            print("Unable to retrieve API key...bad credentials?")
             print(f"Response was: {response.text}")
+            print(response.url)
+            print("Unable to retrieve API key...bad credentials?")
             sys.exit(1)
 
     async def get_request(self, url: str, headers: Dict = None, params: Dict = None):
@@ -166,6 +169,40 @@ class Panorama_api:
 
         print("No Device Groups found..whatchu doing?")
         sys.exit(1)
+
+    async def get_parent_dgs(self):
+        url = f"https://{self.panorama}/api/"
+        xpath = (
+            "/config/readonly/devices/entry[@name='localhost.localdomain']/device-group"
+        )
+        params = {"type": "config", "action": "get", "xpath": xpath, "key": self.apikey}
+        try:
+            response = await self.session[self.apikey].get(url=url, params=params)
+        except httpx.RequestError as e:
+            print("Request error: ", e.request)
+            logger.error(f"Request Error: {url}.")
+        except httpx.HTTPStatusError as e:
+            print(f"{url=}")
+            print("HTTP Status error: ", e)
+            sys.exit()
+
+        parent_dgs = {}
+        xml = etree.fromstring(response.text)
+        dgs = xml.xpath("result/device-group/entry")
+        if not dgs:
+            print("XML error getting parent device groups")
+            sys.exit()
+        for dg in dgs:
+            dg_name = dg.get("name")
+            parent = dg.find("parent-dg")
+
+            if parent is not None:
+                if parent == "shared":
+                    continue
+                parent_dgs[dg_name] = parent.text
+            else:
+                parent_dgs[dg_name] = None
+        return parent_dgs
 
     async def get_objects(
         self, object_type: str, device_group: str = None, params: Dict = None

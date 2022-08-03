@@ -1,0 +1,51 @@
+interactions:
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - 10.254.254.5
+      user-agent:
+      - python-httpx/0.23.0
+    method: GET
+    uri: https://10.254.254.5/api/?type=keygen
+  response:
+    content: <response status = 'error' code = '403'><result><msg>Invalid Credential</msg></result></response>
+    headers:
+      Cache-Control:
+      - no-store, no-cache, must-revalidate, post-check=0, pre-check=0
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '97'
+      Content-Security-Policy:
+      - 'default-src ''self''; script-src ''self'' ''unsafe-eval'' ''unsafe-inline'';
+        style-src ''self'' ''unsafe-inline''; img-src ''self'' data:'
+      Content-Type:
+      - application/xml; charset=UTF-8
+      Date:
+      - Wed, 03 Aug 2022 00:41:55 GMT
+      Expires:
+      - Thu, 19 Nov 1981 08:52:00 GMT
+      Pragma:
+      - no-cache
+      Set-Cookie:
+      - PHPSESSID=5f8cd37b4f2462f9eb50b7db38018adc; path=/; secure; HttpOnly
+      Status:
+      - 403 Invalid Credential
+      Strict-Transport-Security:
+      - max-age=31536000
+      X-Content-Type-Options:
+      - nosniff
+      X-FRAME-OPTIONS:
+      - DENY
+      X-XSS-Protection:
+      - 1; mode=block
+    http_version: HTTP/1.1
+    status_code: 403
+version: 1

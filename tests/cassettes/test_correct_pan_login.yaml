@@ -1,0 +1,51 @@
+interactions:
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - 10.254.254.5
+      user-agent:
+      - python-httpx/0.23.0
+    method: GET
+    uri: https://10.254.254.5/api/?type=keygen
+  response:
+    content: <response status = 'success'><result><key>LUFRPT0vOExwN0RUdlZmdFJMMWlOdk82ZDduaDZDVTQ9L2cxRmVsTmlpL3Y1Sngwa0VRcVo4b0dtSlNrQlM3Z2s1MVJPcVVRQzlNMi9hc1pVN3ZyTmo3NDU5TmRPQTRlSg==</key></result></response>
+    headers:
+      Allow:
+      - GET, HEAD, POST, PUT, DELETE, OPTIONS
+      Cache-Control:
+      - no-store, no-cache, must-revalidate, post-check=0, pre-check=0
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '200'
+      Content-Security-Policy:
+      - 'default-src ''self''; script-src ''self'' ''unsafe-eval'' ''unsafe-inline'';
+        style-src ''self'' ''unsafe-inline''; img-src ''self'' data:'
+      Content-Type:
+      - application/xml; charset=UTF-8
+      Date:
+      - Wed, 03 Aug 2022 00:41:55 GMT
+      Expires:
+      - Thu, 19 Nov 1981 08:52:00 GMT
+      Pragma:
+      - no-cache
+      Set-Cookie:
+      - PHPSESSID=c9263789c2d718da6a40f3717b9508d3; path=/; secure; HttpOnly
+      Strict-Transport-Security:
+      - max-age=31536000
+      X-Content-Type-Options:
+      - nosniff
+      X-FRAME-OPTIONS:
+      - DENY
+      X-XSS-Protection:
+      - 1; mode=block
+    http_version: HTTP/1.1
+    status_code: 200
+version: 1

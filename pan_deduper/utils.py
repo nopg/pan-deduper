@@ -7,12 +7,12 @@ import logging
 import sys
 from datetime import datetime
 from itertools import combinations
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Set
 
 import xmltodict
 from deepdiff import DeepDiff
 from lxml import etree
-from lxml.etree import XMLSyntaxError
+from lxml.etree import XMLSyntaxError, XPathEvalError
 from rich.pretty import pprint
 
 from pan_deduper.panorama_api import Panorama_api
@@ -86,6 +86,8 @@ async def run_deduper(
     elif panorama:
         pan = Panorama_api(panorama=panorama, username=username, password=password)
         await pan.login()
+        settings.EXISTING_PARENT_DGS = await pan.get_parent_dgs()
+        pprint(settings.EXISTING_PARENT_DGS)
         await set_device_groups(pan=pan)
         if deep:
             my_objs = await get_objects_panorama(pan, names_only=False)
@@ -93,11 +95,15 @@ async def run_deduper(
             my_objs = await get_objects_panorama(pan)
 
     print("\n\tDe-duplicating...\n")
+    if settings.MINIMUM_DUPLICATES <= 0:
+        print("Minimum duplicates set to 0, what are you doing?")
+        sys.exit()
     results = {}
     deep_dupes = {}
     for object_type in settings.TO_DEDUPE:
         objs = my_objs[object_type]
         results[object_type] = {}
+
         if deep:
             duplicates, deep_dupes[object_type] = find_duplicates_deep(
                 my_objects=objs, xml=configstr
@@ -317,7 +323,7 @@ async def _get_objects_panorama(
             my_objs[object_type]["shared"] = set([])
         else:
             my_objs[object_type]["shared"] = format_objs(
-                objs=objs, dg="shared", names_only=names_only
+                objs=objs, device_group="shared", names_only=names_only
             )
     else:
         for dg in settings.DEVICE_GROUPS:
@@ -330,50 +336,45 @@ async def _get_objects_panorama(
                 my_objs[object_type][dg] = set([])
             else:
                 my_objs[object_type][dg] = format_objs(
-                    objs=objs, dg=dg, names_only=names_only
+                    objs=objs, device_group=dg, names_only=names_only
                 )
 
     return my_objs
 
 
-def format_objs(objs, dg: str, names_only: bool) -> List:
+def format_objs(objs, device_group: str, names_only: bool) -> Set:
     """
     Format objects before passing on
 
     Args:
         objs: objects
-        dg: device group
+        device_group: device group
         names_only: return values too or just the names
 
     Returns:
-        List of formatted objects
+        Set of formatted objects
     """
     formatted_objs = []
 
-    if not names_only:
-        for obj in objs:
+    for obj in objs:
+        obj_formatted = None
+        if device_group == "shared":
+            obj_formatted = obj.get("@name")
+        else:
             if obj.get("@loc"):
-                if obj.get("@loc") not in settings.NEW_PARENT_DEVICE_GROUP:
-                    if obj.get("@loc") not in settings.EXCLUDE_DEVICE_GROUPS:
-                        formatted_objs.append(obj)
-
-    else:
-        for name in objs:
-            if dg == "shared":
-                obj_name = name["@name"]
-            else:
-                if name["@loc"] not in settings.NEW_PARENT_DEVICE_GROUP:
-                    if name.get("@loc") not in settings.EXCLUDE_DEVICE_GROUPS:
-                        obj_name = name["@name"]
+                if obj.get("@loc") not in (
+                    settings.NEW_PARENT_DEVICE_GROUP,
+                    settings.EXCLUDE_DEVICE_GROUPS,
+                    settings.EXISTING_PARENT_DGS[device_group],
+                ):
+                    if names_only:
+                        obj_formatted = obj["@name"]
                     else:
-                        obj_name = None
-                else:
-                    obj_name = None
-            formatted_objs.append(obj_name)
+                        obj_formatted = obj
 
-        formatted_objs = set(formatted_objs)
+        formatted_objs.append(obj_formatted)
 
-    return formatted_objs
+    return set(formatted_objs)
 
 
 async def get_objects_xml(configstr, deep=None) -> Dict:
@@ -394,6 +395,14 @@ async def get_objects_xml(configstr, deep=None) -> Dict:
         print(exc)
         print("\nInvalid XML File...try again! Our best guess is up there ^^^\n")
         sys.exit(1)
+
+    try:
+        config.xpath("./devices/entry[@name='localhost.localdomain']/device-group/")
+    except XPathEvalError as exc:
+        print(exc)
+        print("\nInvalid XML File...try again! Our best guess is up there ^^^\n")
+        sys.exit(1)
+
 
     # Get device groups and compare/merge with settings.py
     await set_device_groups(config=config)

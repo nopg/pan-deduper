@@ -31,6 +31,7 @@ def xml(
         None,
         "--deep",
         "-d",
+        metavar="Perform deeper search on values (not just names)",
     ),
 ) -> None:
     """
@@ -57,11 +58,11 @@ def xml(
 def panorama(
     panorama_ip: Optional[str] = typer.Option(
         None,
-        "--panorama",
+        "--ip",
         "-i",
         prompt="Panorama IP/FQDN: ",
         help="Panorama IP/FQDN",
-        metavar="x.x.x.x",
+        metavar="x.x.x.x or abc.xyz.com",
     ),
     username: Optional[str] = typer.Option(
         None, "--username", "-u", prompt="Panorama Username: "
@@ -77,6 +78,7 @@ def panorama(
         None,
         "--deep",
         "-d",
+        metavar="Perform deeper search on values (not just names)",
     ),
 ) -> None:
     """

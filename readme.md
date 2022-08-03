@@ -4,11 +4,23 @@ Tool to check objects (addresses, address-groups, services, service-groups) acro
 and move duplicates into a (pre-existing) parent device group.
 
 ## Notes
-Have fun!
+Death to 'shared'!! Use your own 'parent' device group instead.
+
+We will grab the current parent device groups (if any) in case you already have a hierarchy
+If you have a multi-tiered hierarchy already, it's probably best to customize your 'runs' to
+only include the specific device groups and parent group you care about. 
+
+If for some reason you want objects 
+created in two 'parents', just put as many 'new parents' as you need in the list at settings.py
+
+Minimum duplicates can be set to 1, we match on DUPLICATES, not objects.
+
+Currently only looking at and/or deleting from 'shared' if we already determined it's a duplicate and are moving it
+to the new parent device group.
 
 ## Installation
 To install run:
-(substitue python/pip with python3/pip3 if required on your system)
+(substitute python/pip with python3/pip3 if required on your system)
 
 - `python -m venv myenv` <-- you should always create a virtual environment
 - `source myenv/bin/activate` <-- and activate it
@@ -33,7 +45,6 @@ Grab objects from .xml file:
 
 TODO:
 
-DG hierarchy?\
 break testing in many ways\
 tests!!\
 notes about ["@loc"] not in settings.exclude_device_groups---parent?\
