@@ -7,7 +7,7 @@ import logging
 import sys
 from datetime import datetime
 from itertools import combinations
-from typing import Any, Dict, List, Union, Set
+from typing import Any, Dict, List, Set, Union
 
 import xmltodict
 from deepdiff import DeepDiff
@@ -402,7 +402,6 @@ async def get_objects_xml(configstr, deep=None) -> Dict:
         print(exc)
         print("\nInvalid XML File...try again! Our best guess is up there ^^^\n")
         sys.exit(1)
-
 
     # Get device groups and compare/merge with settings.py
     await set_device_groups(config=config)

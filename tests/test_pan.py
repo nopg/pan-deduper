@@ -1,15 +1,17 @@
-import pytest
-import pan_deduper.panorama_api as pa_api
 import os
 
-@pytest.fixture(scope='module')
+import pytest
+
+import pan_deduper.panorama_api as pa_api
+
+
+@pytest.fixture(scope="module")
 def vcr_config():
-    return{
-        "filter_query_parameters": ['user', 'password']
-    }
+    return {"filter_query_parameters": ["user", "password"]}
+
 
 @pytest.mark.asyncio
-#@pytest.mark.vcr()
+# @pytest.mark.vcr()
 async def test_correct_pan_login():
     login_info = {
         "panorama": os.environ.get("PANORAMA_IP"),
@@ -20,8 +22,9 @@ async def test_correct_pan_login():
     await pa.login()
     assert pa.apikey is not None
 
+
 @pytest.mark.asyncio
-#@pytest.mark.vcr()
+# @pytest.mark.vcr()
 async def test_incorrect_pan_login(capsys):
     login_info = {
         "panorama": "10.254.254.5",
