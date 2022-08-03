@@ -68,7 +68,6 @@ class Panorama_api:
             self.login_data = {"X-PAN-KEY": self.apikey}
         else:
             print(f"Response was: {response.text}")
-            print(response.url)
             print("Unable to retrieve API key...bad credentials?")
             sys.exit(1)
 
