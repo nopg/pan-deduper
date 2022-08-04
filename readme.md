@@ -6,17 +6,39 @@ and move duplicates into a (pre-existing) parent device group.
 ## Notes
 Death to 'shared'!! Use your own 'parent' device group instead.
 
-We will grab the current parent device groups (if any) in case you already have a hierarchy
-If you have a multi-tiered hierarchy already, it's probably best to customize your 'runs' to
-only include the specific device groups and parent group you care about. 
+- If for some reason you want objects created in two 'parents', just put as many 'new parents' as you need
+in the list at settings.py 
+- Minimum duplicates can be set to 1, we match on DUPLICATES, not objects.
+- Will only look at and/or delete from 'shared' if we've already determined (on this run) the duplicates
+and just moved them to the new parent device group. If you've previously cleaned everything up and NOW want
+to remove from shared, you missed your chance! (This will be added soon though.)
 
-If for some reason you want objects 
-created in two 'parents', just put as many 'new parents' as you need in the list at settings.py
+#### Some notes on device group hierarchy 
 
-Minimum duplicates can be set to 1, we match on DUPLICATES, not objects.
+```commandline
+All-Devices
+ EU
+  site1
+  site2
+ NA
+  site3
+  site4
+  West
+   west1
+   west2
+  East
+   east1
+   east2
+```
+Taken the above hierarchy:
+* If 'east1', 'east2', 'west1' and 'west2' all have the same object, but the objects only exist due to them being in
+both 'West' and 'East' parent DG's (and not overridden), only 1 duplicate will be found, between 'East' and 'West' DG's.
 
-Currently only looking at and/or deleting from 'shared' if we already determined it's a duplicate and are moving it
-to the new parent device group.
+* If all sites under 'NA' have the same object and do not override it, this is not a duplicate.
+  - If you WANT the object/duplicate moved from 'NA' to 'All-Devices', put 'NA' in CLEANUP_DGS.
+
+* All overrides are treated as a new/local object to whichever DG they belong, and will be deduped/listed out.
+
 
 ## Installation
 To install run:
@@ -45,6 +67,8 @@ Grab objects from .xml file:
 
 TODO:
 
+better settings print
+move from shared to parent dg---separate command, not dupe specific?
 break testing in many ways\
 tests!!\
 notes about ["@loc"] not in settings.exclude_device_groups---parent?\

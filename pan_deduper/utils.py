@@ -87,6 +87,7 @@ async def run_deduper(
         pan = Panorama_api(panorama=panorama, username=username, password=password)
         await pan.login()
         settings.EXISTING_PARENT_DGS = await pan.get_parent_dgs()
+        print("Parent Device Groups:")
         pprint(settings.EXISTING_PARENT_DGS)
         await set_device_groups(pan=pan)
         if deep:
@@ -265,8 +266,9 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None):
             dgs = config.find(
                 "devices/entry[@name='localhost.localdomain']/device-group"
             )
-            for entry in dgs.getchildren():
-                settings.DEVICE_GROUPS.append(entry.get("name"))
+            if dgs:
+                for entry in dgs.getchildren():
+                    settings.DEVICE_GROUPS.append(entry.get("name"))
     else:
         if not settings.DEVICE_GROUPS:
             settings.DEVICE_GROUPS = await pan.get_device_groups()
@@ -276,8 +278,11 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None):
             if dg in settings.DEVICE_GROUPS:
                 settings.DEVICE_GROUPS.remove(dg)
 
+    # to be prettyized
     print(f"\nComparing these DEVICE GROUPS:\n{settings.DEVICE_GROUPS}")
     print(f"\nand these OBJECT TYPES:\n{settings.TO_DEDUPE}\n")
+    print(f"\nwith these cleanup DG's:\n{settings.CLEANUP_DGS}")
+    print(f"\nMust be ({settings.MINIMUM_DUPLICATES}) duplicates to be considered.\n")
 
 
 async def get_objects_panorama(
@@ -342,7 +347,9 @@ async def _get_objects_panorama(
     return my_objs
 
 
-def format_objs(objs, device_group: str, names_only: bool) -> Set:
+def format_objs(
+    objs: List[Dict], device_group: str, names_only: bool
+) -> Union[Set, List]:
     """
     Format objects before passing on
 
@@ -360,21 +367,21 @@ def format_objs(objs, device_group: str, names_only: bool) -> Set:
         obj_formatted = None
         if device_group == "shared":
             obj_formatted = obj.get("@name")
-        else:
-            if obj.get("@loc"):
-                if obj.get("@loc") not in (
-                    settings.NEW_PARENT_DEVICE_GROUP,
-                    settings.EXCLUDE_DEVICE_GROUPS,
-                    settings.EXISTING_PARENT_DGS[device_group],
-                ):
-                    if names_only:
-                        obj_formatted = obj["@name"]
-                    else:
-                        obj_formatted = obj
+        elif obj.get("@loc") in (
+            device_group,
+            settings.CLEANUP_DGS,
+        ):  # != obj.get("location")
+            if names_only:
+                obj_formatted = obj["@name"]
+            else:
+                obj_formatted = obj
 
         formatted_objs.append(obj_formatted)
 
-    return set(formatted_objs)
+    if names_only:
+        formatted_objs = set(formatted_objs)
+
+    return formatted_objs
 
 
 async def get_objects_xml(configstr, deep=None) -> Dict:
@@ -397,9 +404,10 @@ async def get_objects_xml(configstr, deep=None) -> Dict:
         sys.exit(1)
 
     try:
-        config.xpath("./devices/entry[@name='localhost.localdomain']/device-group/")
+        config.xpath("./devices/entry[@name='localhost.localdomain']/device-group")
     except XPathEvalError as exc:
         print(exc)
+        print(dir(exc))
         print("\nInvalid XML File...try again! Our best guess is up there ^^^\n")
         sys.exit(1)
 
