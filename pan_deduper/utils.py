@@ -496,46 +496,47 @@ def find_duplicates_deep(my_objects, xml: Union[None, str]):
         for obj1 in my_objects[dg1]:
             for obj2 in my_objects[dg2]:
                 # We are now comparing two lists of objects
-                if obj1.get(nametag) == obj2.get(nametag):
-                    dupe_name = obj1.get(nametag)
-                    if xml:  # Convert to Dict so we can use Deep Diff
-                        dupe_obj1 = xmltodict.parse(etree.tostring(obj1))["entry"]
-                        dupe_obj2 = xmltodict.parse(etree.tostring(obj2))["entry"]
-                    else:
-                        dupe_obj1 = obj1
-                        dupe_obj2 = obj2
-
-                    # Don't need these keys, will cause dupe checking issues too
-                    for key in ("@loc", "@location", "@device-group", "@overrides"):
-                        if dupe_obj1.get(key):
-                            dupe_obj1.pop(key)
-                        if dupe_obj2.get(key):
-                            dupe_obj2.pop(key)
-
-                    # Deep Diff!
-                    diff = DeepDiff(dupe_obj1, dupe_obj2, ignore_order=True)
-                    if not diff:
-                        # We have a dupe! Add the dupe & device-groups to our list
-                        if dupe_name is None:
-                            print("how did this happen??")
+                if obj1 and obj2:
+                    if obj1.get(nametag) == obj2.get(nametag):
+                        dupe_name = obj1.get(nametag)
+                        if xml:  # Convert to Dict so we can use Deep Diff
+                            dupe_obj1 = xmltodict.parse(etree.tostring(obj1))["entry"]
+                            dupe_obj2 = xmltodict.parse(etree.tostring(obj2))["entry"]
                         else:
-                            if duplicates.get(dupe_name):
-                                if dg1 not in duplicates[dupe_name]:
-                                    duplicates[dupe_name].append(dg1)
-                                if dg2 not in duplicates[dupe_name]:
-                                    duplicates[dupe_name].append(dg2)
+                            dupe_obj1 = obj1
+                            dupe_obj2 = obj2
+
+                        # Don't need these keys, will cause dupe checking issues too
+                        for key in ("@loc", "@location", "@device-group", "@overrides"):
+                            if dupe_obj1.get(key):
+                                dupe_obj1.pop(key)
+                            if dupe_obj2.get(key):
+                                dupe_obj2.pop(key)
+
+                        # Deep Diff!
+                        diff = DeepDiff(dupe_obj1, dupe_obj2, ignore_order=True)
+                        if not diff:
+                            # We have a dupe! Add the dupe & device-groups to our list
+                            if dupe_name is None:
+                                print("how did this happen??")
                             else:
-                                duplicates[dupe_name] = list(items)
-                    else:
-                        # weirdness required due to json.dumps("@blah"), to be betterized
-                        temp1 = {"@device-group": dg1}
-                        temp2 = {"@device-group": dg2}
-                        temp1.update(dupe_obj1)
-                        temp2.update(dupe_obj2)
-                        diffs.append([temp1, temp2])
-                        print(
-                            f"Deep check found {temp1.get('@name')} in {temp1.get('@device-group')} and {temp2.get('@name')} in {temp2.get('@device-group')}"
-                        )
+                                if duplicates.get(dupe_name):
+                                    if dg1 not in duplicates[dupe_name]:
+                                        duplicates[dupe_name].append(dg1)
+                                    if dg2 not in duplicates[dupe_name]:
+                                        duplicates[dupe_name].append(dg2)
+                                else:
+                                    duplicates[dupe_name] = list(items)
+                        else:
+                            # weirdness required due to json.dumps("@blah"), to be betterized
+                            temp1 = {"@device-group": dg1}
+                            temp2 = {"@device-group": dg2}
+                            temp1.update(dupe_obj1)
+                            temp2.update(dupe_obj2)
+                            diffs.append([temp1, temp2])
+                            print(
+                                f"Deep check found {temp1.get('@name')} in {temp1.get('@device-group')} and {temp2.get('@name')} in {temp2.get('@device-group')}"
+                            )
     return duplicates, diffs
 
 
