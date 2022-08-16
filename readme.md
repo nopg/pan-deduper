@@ -1,7 +1,9 @@
-Panorama Object Deduper
+Palo Alto Panorama Object Deduper
 ===========
 Tool to check objects (addresses, address-groups, services, service-groups) across all Device Groups
 and move duplicates into a (pre-existing) parent device group.
+
+This is for a Palo Alto Panorama deployment.
 
 ## Notes
 Death to 'shared'!! Use your own 'parent' device group instead.

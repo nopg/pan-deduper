@@ -375,8 +375,8 @@ def format_objs(
                 obj_formatted = obj["@name"]
             else:
                 obj_formatted = obj
-
-        formatted_objs.append(obj_formatted)
+        if obj_formatted:   # If not, don't append it
+            formatted_objs.append(obj_formatted)
 
     if names_only:
         formatted_objs = set(formatted_objs)
@@ -569,7 +569,7 @@ def find_object(objs_list, object_type, device_group, name):
     Find object to be used for creation in parent device group
 
     Args:
-        objs_list:  List of objects to search through
+        objs_list:  Dict of objects to search through
         object_type:    address/group/services/groups
         device_group:  device group
         name:   name of object to find
@@ -580,9 +580,18 @@ def find_object(objs_list, object_type, device_group, name):
     """
 
     for obj in objs_list[object_type][device_group]:
-        if obj.get("@name"):
-            if obj["@name"] == name:
-                return obj
+        if obj:
+            try:
+                if obj.get("@name") == name:
+                    return obj
+            except AttributeError:
+                message = f"""
+                    Error searching through objects list, exiting due to major malfunction.
+                    obj == {obj}
+                """
+                logger.error(message)
+                print(message)
+                sys.exit(1)
 
     return None
 
