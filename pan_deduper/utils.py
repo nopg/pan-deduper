@@ -143,18 +143,12 @@ async def run_deduper(
         if changes <= 50:
             pprint(results)
         else:
-            yesno = ""
-            while yesno not in ("y", "n", "yes", "no"):
-                yesno = input("Print them all? (y/n)")
-            if yesno in ("yes", "y"):
+            answer = ask_user("Print them all? (y/n)")
+            if answer in ("yes", "y"):
                 pprint(results)
         if settings.PUSH_TO_PANORAMA and not configstr:
-            yesno = ""
-            while yesno not in ("y", "n", "yes", "no"):
-                yesno = input(
-                    "About to begin moving duplicate objects...continue? (y/n): "
-                )
-            if yesno in ("yes", "y"):
+            answer = ask_user("About to begin moving duplicate objects...continue? (y/n): ")
+            if answer in ("yes", "y"):
                 await push_to_panorama(pan=pan, results=results)
 
     print("\n\tDone! Results(duplicate list) also saved in duplicates.json.\n")
@@ -335,10 +329,8 @@ async def push_to_panorama(pan, results) -> None:
 
     # Now lets delete shared (to delete!!)
     if settings.DELETE_SHARED_OBJECTS:
-        yesno = ""
-        while yesno not in ("y", "n", "yes", "no"):
-            yesno = input("\n\tAll cleaned up...cleanup 'shared' also? (y/n): ")
-        if yesno in ("yes", "y"):
+        answer = ask_user("\n\tAll cleaned up...cleanup 'shared' also? (y/n): ")
+        if answer in ("yes", "y"):
             shared_objs = await get_objects_panorama(
                 pan=pan, shared=True, names_only=True
             )
@@ -414,15 +406,21 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None, deep: bool
     logger.info(settings_message)
     print(inspect.cleandoc(settings_message))
 
-    yesno = ""
-    while yesno not in ("y", "n", "yes", "no"):
-        yesno = input(
-            "DO THE ABOVE SETTINGS LOOK CORRECT? Ensure Panorama candidate config state is as desired as well! (y/n): "
-        )
-    if yesno in ("no", "n"):
+    answer = ask_user("DO THE ABOVE SETTINGS LOOK CORRECT? Ensure Panorama candidate config state is as desired as well! (y/n): ")
+
+    if answer in ("no", "n"):
         print("Exiting..")
         sys.exit()
     print("\n\n")
+
+
+def ask_user(question: str):
+    answer = ""
+    while answer.lower() not in ("y", "n", "yes", "no"):
+        answer = input(
+            "DO THE ABOVE SETTINGS LOOK CORRECT? Ensure Panorama candidate config state is as desired as well! (y/n): "
+        )
+    return answer.lower()
 
 
 async def get_objects_panorama(
