@@ -80,7 +80,6 @@ async def run_deduper(
 
     my_objs = []
 
-    print("\n\tGetting...\n")
     if configstr:
         my_objs = await get_objects_xml(configstr, deep)
 
@@ -401,9 +400,9 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None, deep: bool
     CLEANUP PARENTS: \t{', '.join(dg for dg in settings.CLEANUP_DGS)}
     MINIMUM DUPLICATES: \t{settings.MINIMUM_DUPLICATES}
     DEEP DEDUPE: \t\t{deep}
-    PUSH_TO_PANORAMA: \t\t{settings.PUSH_TO_PANORAMA}
-    DELETE_SHARED_OBJECTS: \t{settings.DELETE_SHARED_OBJECTS}
-    NEW_PARENT_DEVICE_GROUP: \t{', '.join(dg for dg in settings.NEW_PARENT_DEVICE_GROUP)}
+    PUSH TO PANORAMA: \t\t{settings.PUSH_TO_PANORAMA}
+    DELETE SHARED OBJECTS: \t{settings.DELETE_SHARED_OBJECTS}
+    NEW PARENT DEVICE GROUP: \t{', '.join(dg for dg in settings.NEW_PARENT_DEVICE_GROUP)}
     ------------------------
     
     """
