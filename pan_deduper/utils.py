@@ -224,6 +224,11 @@ async def create_tags(tags, pan: Panorama_api):
             full_tag = await pan.get_objects(
                 object_type="tags", device_group=dg, params=params
             )
+            if not full_tag:
+                error = f"Error pulling tag {tag} from {dg}, must be inherited, skipping"
+                print(error)
+                logger.error(error)
+                continue
             full_tag = full_tag[0]
             coroutines.append(
                 pan.create_object(
@@ -242,7 +247,6 @@ async def delete_tags(tags, pan: Panorama_api):
     Args:
         tags: Dict of tags {dg: [tag names]}
         pan: Panorama API Object
-
     """
     coroutines = []
     for dg, tags in tags.items():

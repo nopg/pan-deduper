@@ -236,7 +236,10 @@ class Panorama_api:
             sys.exit(0)
 
         response = await self.get_request(url=url, params=params)
-        if int(response.get("result").get("@count")) > 0:
+        if not response.get("result"):
+            logger.error(f"Failed getting object via: {url}")
+            logger.error(f"Failed above, parameters: {params}")
+        elif int(response.get("result").get("@count")) > 0:
             return response["result"]["entry"]
 
         return None
