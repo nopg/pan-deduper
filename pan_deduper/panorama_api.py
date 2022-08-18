@@ -1,7 +1,7 @@
 """pan_deduper.panorama_api"""
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import httpx
 from lxml import etree
@@ -229,6 +229,8 @@ class Panorama_api:
             url = "Objects/Services"
         elif object_type == "service-groups":
             url = "Objects/ServiceGroups"
+        elif object_type == "tags":
+            url = "Objects/Tags"
         else:
             print(f"Unsupported object_type sent: {object_type}")
             sys.exit(0)
@@ -263,6 +265,8 @@ class Panorama_api:
             url = "Objects/Services"
         elif object_type == "service-groups":
             url = "Objects/ServiceGroups"
+        elif object_type == "tags":
+            url = "Objects/Tags"
         else:
             print(f"Unsupported object_type sent: {object_type}")
             sys.exit(0)
@@ -292,7 +296,7 @@ class Panorama_api:
 
         return None
 
-    async def create_object(self, object_type: str, obj: Dict, device_group: str):
+    async def create_object(self, object_type: str, obj: Dict, device_group: List):
         """
         Create object
 
@@ -313,6 +317,8 @@ class Panorama_api:
             url = "Objects/Services"
         elif object_type == "service-groups":
             url = "Objects/ServiceGroups"
+        elif object_type == "tags":
+            url = "Objects/Tags"
         else:
             print(f"Unsupported object_type sent: {object_type}")
             sys.exit(0)

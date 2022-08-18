@@ -9,11 +9,20 @@ This is for a Palo Alto Panorama deployment.
 Death to 'shared'!! Use your own 'parent' device group instead.
 
 - If for some reason you want objects created in two 'parents', just put as many 'new parents' as you need
-in the list at settings.py 
+  in the list at settings.py 
 - Minimum duplicates can be set to 1, we match on DUPLICATES, not objects.
 - Will only look at and/or delete from 'shared' if we've already determined (on this run) the duplicates
-and just moved them to the new parent device group. If you've previously cleaned everything up and NOW want
-to remove from shared, you missed your chance! (This will be added soon though.)
+  and just moved them to the new parent device group. If you've previously cleaned everything up and NOW want
+  to remove from shared, you missed your chance! (This will be added soon though.)
+- If tags exist on these objects, the tags will also be moved up to the parent device group. The first
+  device group with the tag will be cloned/moved, any other device groups with the same tag name will take on
+  the 'color' of this new tag.
+- As usual when making major changes, get a Panorama named snapshot BEFORE pushing any changes. Sometimes it 
+  can also be helpful to use this snapshot to check out the value of objects as they existed before the 
+  changes were pushed, if errors occurred however you don't want to completely revert.
+
+
+
 
 #### Some notes on device group hierarchy 
 
@@ -69,10 +78,7 @@ Grab objects from .xml file:
 
 TODO:
 
-better settings print
-move from shared to parent dg---separate command, not dupe specific?
-break testing in many ways\
-tests!!\
-notes about ["@loc"] not in settings.exclude_device_groups---parent?\
+should parent dg automatically be excluded?\
+move from shared to parent dg---separate command, not dupe specific?\
 make httpx timeout even longer?(and on httpx.client)\
 logging on 'gets'

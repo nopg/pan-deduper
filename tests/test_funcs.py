@@ -40,17 +40,27 @@ def test_find_object():
         N/A
     """
     my_args = {
-        "objs_list" : {"addresses":{"dg1":[{'hi': 'lo', '@name': 'hi'}], "dg2": [{"no": 'hi'}]}},
-        "object_type" : "addresses",
-        "device_group" :"dg1",
-        "name" : "hi",
+        "objs_list": {
+            "addresses": {
+                "dg1": [{"ip-netmask": "10.1.1.0/24", "@name": "testobj"}],
+                "dg2": [{"ip-netmask": "nope"}],
+            }
+        },
+        "object_type": "addresses",
+        "device_group": "dg1",
+        "name": "testobj",
     }
 
     obj = utils.find_object(**my_args)
-    assert obj == {"hi": "lo", "@name": "hi"}
+    assert obj == {"ip-netmask": "10.1.1.0/24", "@name": "testobj"}
 
     my_broken_args = my_args
-    my_broken_args["objs_list"] = {"addresses":{"dg1":{'hi': 'lo', '@name': 'hi'}, "dg2": [{"no": 'hi'}]}}
+    my_broken_args["objs_list"] = {
+        "addresses": {
+            "dg1": {"ip-netmask": "10.1.1.0/24", "@name": "testobj"},
+            "dg2": [{"ip-netmask": "nope"}],
+        }
+    }
 
     with pytest.raises(SystemExit) as error:
         obj = utils.find_object(**my_broken_args)

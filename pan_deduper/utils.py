@@ -2,6 +2,7 @@
 import asyncio
 import importlib.resources as pkg_resources
 import importlib.util
+import inspect
 import json
 import logging
 import sys
@@ -86,10 +87,10 @@ async def run_deduper(
     elif panorama:
         pan = Panorama_api(panorama=panorama, username=username, password=password)
         await pan.login()
-        settings.EXISTING_PARENT_DGS = await pan.get_parent_dgs()
-        print("Parent Device Groups:")
-        pprint(settings.EXISTING_PARENT_DGS)
-        await set_device_groups(pan=pan)
+        # settings.EXISTING_PARENT_DGS = await pan.get_parent_dgs()
+        # print("Parent Device Groups:")
+        # pprint(settings.EXISTING_PARENT_DGS)
+        await set_device_groups(pan=pan, deep=deep)
         if deep:
             my_objs = await get_objects_panorama(pan, names_only=False)
         else:
@@ -139,7 +140,7 @@ async def run_deduper(
     else:
         pprint(f"{length} objects found in total.")
         pprint(f"{changes} object changes.")
-        if changes <= 20:
+        if changes <= 50:
             pprint(results)
         else:
             yesno = ""
@@ -158,6 +159,112 @@ async def run_deduper(
 
     print("\n\tDone! Results(duplicate list) also saved in duplicates.json.\n")
     logger.info("Done.")
+
+
+def get_any_tags(objs):
+    """
+    Get any tags so that we can build the objects properly
+
+    Args:
+        objs: dict of duplicate objects {type: {dg: [objs]} }
+
+    Returns:
+        tags: Dict of tags {dg: [tag names]}
+    """
+    tags = {}
+
+    # Create Dict of {DG: [Tag names]}
+    for object_type, device_groups in objs.items():
+        for group, objects in device_groups.items():
+            for obj in objects:
+                if obj.get("tag"):
+                    members = obj["tag"].get("member")
+                    if members:
+                        for tag in obj["tag"]["member"]:
+                            # Create empty if this is the first
+                            if not tags.get(group):
+                                tags[group] = []
+                            # Add Tag to list
+                            if tag not in tags[group]:
+                                tags[group].append(tag)
+                    else:
+                        message = f"Error pulling tag from: {obj}, exiting.."
+                        logger.error(message)
+                        print(message)
+                        sys.exit(1)
+
+    return tags
+
+
+async def create_tags(tags, pan: Panorama_api):
+    """
+    Create the tags
+
+    Args:
+        tags: Dict of tags {dg: [tag names]}
+        pan: Panorama API Object
+    """
+
+    # Reorganize and ignore any duplicate names
+    # 1st tag found will be used as the clone in parent device group
+    to_create = {}
+    tag_list = []
+    for dg, tags in tags.items():
+        for tag in tags:
+            if tag not in tag_list:
+                tag_list.append(tag)
+                if not to_create.get(dg):
+                    to_create[dg] = []
+                to_create[dg].append(tag)
+
+    # Get and create tags
+    coroutines = []
+    for dg, tags in to_create.items():
+        for tag in tags:
+            params = {"location": "device-group", "device-group": f"{dg}", "name": tag}
+            full_tag = await pan.get_objects(
+                object_type="tags", device_group=dg, params=params
+            )
+            full_tag = full_tag[0]
+            coroutines.append(
+                pan.create_object(
+                    object_type="tags",
+                    obj=full_tag,
+                    device_group=settings.NEW_PARENT_DEVICE_GROUP,
+                )
+            )
+
+    await asyncio.gather(*coroutines)
+
+
+async def delete_tags(tags, pan: Panorama_api):
+    """
+    Delete the tags
+    Args:
+        tags: Dict of tags {dg: [tag names]}
+        pan: Panorama API Object
+
+    """
+    coroutines = []
+    for dg, tags in tags.items():
+        for tag in tags:
+            coroutines.append(
+                pan.delete_object(object_type="tags", name=tag, device_group=dg)
+            )
+
+    await asyncio.gather(*coroutines)
+
+
+async def cleanup_tags(tags, pan: Panorama_api):
+    """
+    Can't create the objects in Parent-DG if the Tag doesn't also exist there
+
+    Args:
+        tags: Dict of tags {dg: [tag names]}
+        pan: Panorama API Object
+    """
+    await create_tags(tags=tags, pan=pan)
+    await delete_tags(tags=tags, pan=pan)
 
 
 async def push_to_panorama(pan, results) -> None:
@@ -185,10 +292,17 @@ async def push_to_panorama(pan, results) -> None:
     # Get full objects so we can create them elsewhere
     my_objs = await get_objects_panorama(pan=pan, names_only=False)
 
+    print("Checking for any tags to clean up as well...")
+    my_tags = get_any_tags(objs=my_objs)
+    await cleanup_tags(tags=my_tags, pan=pan)
+
     # Order of creation/deletion is super important...thus hard-coded here
     # Do the creates
     print(
-        "\n\n`tail -f` or open 'deduper.log' in your favorite editor to watch the show..\n"
+        "\n\nThis may take awhile, the Panorama management plane is frustratingly slow as we all know...please wait!"
+    )
+    print(
+        "\n`tail -f` or open 'deduper.log' in your favorite editor to watch the show..\n"
     )
     print("\nCreating objects...")
     await do_the_creates(
@@ -219,7 +333,7 @@ async def push_to_panorama(pan, results) -> None:
     if settings.DELETE_SHARED_OBJECTS:
         yesno = ""
         while yesno not in ("y", "n", "yes", "no"):
-            yesno = input("All cleaned up...cleanup 'shared' also? (y/n): ")
+            yesno = input("\n\tAll cleaned up...cleanup 'shared' also? (y/n): ")
         if yesno in ("yes", "y"):
             shared_objs = await get_objects_panorama(
                 pan=pan, shared=True, names_only=True
@@ -248,7 +362,7 @@ async def push_to_panorama(pan, results) -> None:
     return None
 
 
-async def set_device_groups(*, config=None, pan: Panorama_api = None):
+async def set_device_groups(*, config=None, pan: Panorama_api = None, deep: bool):
     """
     Set the device groups that will be searched through
 
@@ -266,7 +380,7 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None):
             dgs = config.find(
                 "devices/entry[@name='localhost.localdomain']/device-group"
             )
-            if dgs:
+            if dgs is not None:
                 for entry in dgs.getchildren():
                     settings.DEVICE_GROUPS.append(entry.get("name"))
     else:
@@ -278,11 +392,33 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None):
             if dg in settings.DEVICE_GROUPS:
                 settings.DEVICE_GROUPS.remove(dg)
 
-    # to be prettyized
-    print(f"\nComparing these DEVICE GROUPS:\n{settings.DEVICE_GROUPS}")
-    print(f"\nand these OBJECT TYPES:\n{settings.TO_DEDUPE}\n")
-    print(f"\nwith these cleanup DG's:\n{settings.CLEANUP_DGS}")
-    print(f"\nMust be ({settings.MINIMUM_DUPLICATES}) duplicates to be considered.\n")
+    settings_message = f"""
+    ------------------------
+    Settings for this run:
+    
+    OBJECT TYPES: \t{', '.join(obj_type for obj_type in settings.TO_DEDUPE)}
+    DEVICE GROUPS: \t{', '.join(dg for dg in settings.DEVICE_GROUPS)}
+    CLEANUP PARENTS: \t{', '.join(dg for dg in settings.CLEANUP_DGS)}
+    MINIMUM DUPLICATES: \t{settings.MINIMUM_DUPLICATES}
+    DEEP DEDUPE: \t\t{deep}
+    PUSH_TO_PANORAMA: \t\t{settings.PUSH_TO_PANORAMA}
+    DELETE_SHARED_OBJECTS: \t{settings.DELETE_SHARED_OBJECTS}
+    NEW_PARENT_DEVICE_GROUP: \t{', '.join(dg for dg in settings.NEW_PARENT_DEVICE_GROUP)}
+    ------------------------
+    
+    """
+    logger.info(settings_message)
+    print(inspect.cleandoc(settings_message))
+
+    yesno = ""
+    while yesno not in ("y", "n", "yes", "no"):
+        yesno = input(
+            "DO THE ABOVE SETTINGS LOOK CORRECT? Ensure Panorama candidate config state is as desired as well! (y/n): "
+        )
+    if yesno in ("no", "n"):
+        print("Exiting..")
+        sys.exit()
+    print("\n\n")
 
 
 async def get_objects_panorama(
@@ -375,7 +511,7 @@ def format_objs(
                 obj_formatted = obj["@name"]
             else:
                 obj_formatted = obj
-        if obj_formatted:   # If not, don't append it
+        if obj_formatted:  # If not, don't append it
             formatted_objs.append(obj_formatted)
 
     if names_only:
@@ -412,7 +548,7 @@ async def get_objects_xml(configstr, deep=None) -> Dict:
         sys.exit(1)
 
     # Get device groups and compare/merge with settings.py
-    await set_device_groups(config=config)
+    await set_device_groups(config=config, deep=deep)
 
     # Get objects - build into x[type][device-group][name1,name2,...]
     my_objs = {}
@@ -496,7 +632,7 @@ def find_duplicates_deep(my_objects, xml: Union[None, str]):
         for obj1 in my_objects[dg1]:
             for obj2 in my_objects[dg2]:
                 # We are now comparing two lists of objects
-                if obj1 and obj2:
+                if obj1 is not None and obj2 is not None:
                     if obj1.get(nametag) == obj2.get(nametag):
                         dupe_name = obj1.get(nametag)
                         if xml:  # Convert to Dict so we can use Deep Diff
@@ -653,6 +789,8 @@ async def do_the_deletes(
         if results.get(object_type):
             for dupe, device_groups in results[object_type].items():
                 for group in device_groups:
+                    if group in settings.NEW_PARENT_DEVICE_GROUP:  # do this better?
+                        continue
                     coroutines.append(
                         pan.delete_object(
                             object_type=object_type, name=dupe, device_group=group
