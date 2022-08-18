@@ -18,6 +18,7 @@ from rich.pretty import pprint
 
 from pan_deduper.panorama_api import Panorama_api
 
+
 # Logging setup:
 logger = logging.getLogger("utils")
 logger.setLevel(logging.INFO)
@@ -295,7 +296,7 @@ async def push_to_panorama(pan, results) -> None:
     # Get full objects so we can create them elsewhere
     my_objs = await get_objects_panorama(pan=pan, names_only=False)
 
-    print("Checking for any tags to clean up as well...")
+    print("\nChecking for any tags to clean up as well...")
     my_tags = get_any_tags(objs=my_objs)
     await cleanup_tags(tags=my_tags, pan=pan)
 

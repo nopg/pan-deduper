@@ -81,4 +81,6 @@ TODO:
 should parent dg automatically be excluded?\
 move from shared to parent dg---separate command, not dupe specific?\
 make httpx timeout even longer?(and on httpx.client)\
-logging on 'gets'
+logging on 'gets'?\
+better cleanup of inherited tags?
+

@@ -1,4 +1,5 @@
 """pan_deduper.panorama_api"""
+import asyncio
 import logging
 import sys
 from typing import Any, Dict, List
@@ -9,6 +10,7 @@ from lxml import etree
 from pan_deduper import settings
 
 API_VERSION = "v10.1"
+ASYNC_MAX_CONCURRENT_REQUESTS = asyncio.Semaphore(value=200)
 logger = logging.getLogger("utils")
 
 
@@ -244,7 +246,12 @@ class Panorama_api:
 
         return None
 
-    async def delete_object(
+    async def delete_object(self, **kwargs):
+        async with ASYNC_MAX_CONCURRENT_REQUESTS:
+            result = await self._delete_object(**kwargs)
+            return result
+
+    async def _delete_object(
         self, object_type: str, name: str, device_group: str = None, params: Dict = None
     ):
         """
@@ -299,7 +306,12 @@ class Panorama_api:
 
         return None
 
-    async def create_object(self, object_type: str, obj: Dict, device_group: List):
+    async def create_object(self, **kwargs):
+        async with ASYNC_MAX_CONCURRENT_REQUESTS:
+            result = await self._create_object(**kwargs)
+            return result
+
+    async def _create_object(self, object_type: str, obj: Dict, device_group: List):
         """
         Create object
 
