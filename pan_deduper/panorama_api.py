@@ -10,7 +10,6 @@ from lxml import etree
 from pan_deduper import settings
 
 API_VERSION = "v10.1"
-ASYNC_MAX_CONCURRENT_REQUESTS = asyncio.Semaphore(value=200)
 logger = logging.getLogger("utils")
 
 
@@ -246,8 +245,8 @@ class Panorama_api:
 
         return None
 
-    async def delete_object(self, **kwargs):
-        async with ASYNC_MAX_CONCURRENT_REQUESTS:
+    async def delete_object(self, limit, **kwargs):
+        async with limit:
             result = await self._delete_object(**kwargs)
             return result
 
@@ -306,8 +305,8 @@ class Panorama_api:
 
         return None
 
-    async def create_object(self, **kwargs):
-        async with ASYNC_MAX_CONCURRENT_REQUESTS:
+    async def create_object(self, limit, **kwargs):
+        async with limit:
             result = await self._create_object(**kwargs)
             return result
 

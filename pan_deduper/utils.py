@@ -213,6 +213,7 @@ async def create_tags(tags, pan: Panorama_api):
 
     # Get and create tags
     coroutines = []
+    ASYNC_MAX_CONCURRENT_REQUESTS = asyncio.Semaphore(value=200)
     for dg, tags in to_create.items():
         for tag in tags:
             params = {"location": "device-group", "device-group": f"{dg}", "name": tag}
@@ -227,6 +228,7 @@ async def create_tags(tags, pan: Panorama_api):
             full_tag = full_tag[0]
             coroutines.append(
                 pan.create_object(
+                    limit=ASYNC_MAX_CONCURRENT_REQUESTS,
                     object_type="tags",
                     obj=full_tag,
                     device_group=settings.NEW_PARENT_DEVICE_GROUP,
@@ -243,11 +245,12 @@ async def delete_tags(tags, pan: Panorama_api):
         tags: Dict of tags {dg: [tag names]}
         pan: Panorama API Object
     """
+    ASYNC_MAX_CONCURRENT_REQUESTS = asyncio.Semaphore(value=200)
     coroutines = []
     for dg, tags in tags.items():
         for tag in tags:
             coroutines.append(
-                pan.delete_object(object_type="tags", name=tag, device_group=dg)
+                pan.delete_object(limit=ASYNC_MAX_CONCURRENT_REQUESTS,object_type="tags", name=tag, device_group=dg)
             )
 
     await asyncio.gather(*coroutines)
@@ -417,9 +420,7 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None, deep: bool
 def ask_user(question: str):
     answer = ""
     while answer.lower() not in ("y", "n", "yes", "no"):
-        answer = input(
-            "DO THE ABOVE SETTINGS LOOK CORRECT? Ensure Panorama candidate config state is as desired as well! (y/n): "
-        )
+        answer = input(question)
     return answer.lower()
 
 
@@ -748,6 +749,7 @@ async def do_the_creates(
 
     """
     coroutines = []
+    ASYNC_MAX_CONCURRENT_REQUESTS = asyncio.Semaphore(value=200)
     for object_type in object_types:
         if results.get(object_type):
             for dupe, device_groups in results[object_type].items():
@@ -765,6 +767,7 @@ async def do_the_creates(
                 # Create it
                 coroutines.append(
                     pan.create_object(
+                        limit=ASYNC_MAX_CONCURRENT_REQUESTS,
                         object_type=object_type,
                         obj=dupe_obj,
                         device_group=settings.NEW_PARENT_DEVICE_GROUP,
@@ -786,6 +789,7 @@ async def do_the_deletes(
         object_types: object types to be deleted (used to send groups in before objects)
 
     """
+    ASYNC_MAX_CONCURRENT_REQUESTS = asyncio.Semaphore(value=200)
     coroutines = []
     for object_type in object_types:
         if results.get(object_type):
@@ -795,7 +799,7 @@ async def do_the_deletes(
                         continue
                     coroutines.append(
                         pan.delete_object(
-                            object_type=object_type, name=dupe, device_group=group
+                            limit=ASYNC_MAX_CONCURRENT_REQUESTS,object_type=object_type, name=dupe, device_group=group
                         )
                     )
 
@@ -813,13 +817,14 @@ async def do_the_deletes_shared(
         objects: objects (duplicates) to be deleted
         object_types: object types to be deleted (used to send groups in before objects)
     """
+    ASYNC_MAX_CONCURRENT_REQUESTS = asyncio.Semaphore(value=200)
     coroutines = []
     params = {"location": "shared"}
     for object_type in object_types:
         if objects.get(object_type):
             for dupe in objects[object_type]:
                 coroutines.append(
-                    pan.delete_object(object_type=object_type, name=dupe, params=params)
+                    pan.delete_object(limit=ASYNC_MAX_CONCURRENT_REQUESTS,object_type=object_type, name=dupe, params=params)
                 )
 
     await asyncio.gather(*coroutines)
