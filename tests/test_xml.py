@@ -33,6 +33,6 @@ async def test_bad_xml2(capsys):
 @pytest.mark.asyncio
 async def test_empty_xml(capsys, monkeypatch):
     empty_xml = "<hi><no></no></hi>"
-    monkeypatch.setattr('builtins.input', lambda _: "Yes")
+    monkeypatch.setattr("builtins.input", lambda _: "Yes")
     objs = await utils.get_objects_xml(empty_xml)
     assert isinstance(objs, dict)

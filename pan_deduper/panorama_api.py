@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union, Tuple
 
 import httpx
 from lxml import etree
@@ -245,14 +245,14 @@ class Panorama_api:
 
         return None
 
-    async def delete_object(self, limit, **kwargs):
+    async def delete_object(self, limit, **kwargs) -> Union[None, Tuple]:
         async with limit:
             result = await self._delete_object(**kwargs)
             return result
 
     async def _delete_object(
-        self, object_type: str, name: str, device_group: str = None, params: Dict = None
-    ):
+        self, object_type: str, name: str, set_output: bool, device_group: str = None, params: Dict = None,
+    ) -> Union[None, Tuple]:
         """
         Delete objects
 
@@ -289,6 +289,9 @@ class Panorama_api:
             device_group = "shared"
             params["name"] = name
 
+        if set_output:
+            return self.delete_set_output(name=name, device_group=device_group, object_type=object_type)
+
         # logger.info(f"starting to delete {name}.")
         response = await self.delete_request(url=url, params=params)
 
@@ -305,12 +308,12 @@ class Panorama_api:
 
         return None
 
-    async def create_object(self, limit, **kwargs):
+    async def create_object(self, limit, **kwargs) -> Union[None, Tuple]:
         async with limit:
             result = await self._create_object(**kwargs)
             return result
 
-    async def _create_object(self, object_type: str, obj: Dict, device_group: List):
+    async def _create_object(self, object_type: str, obj: Dict, device_group: List, set_output: bool) -> Union[None, str]:
         """
         Create object
 
@@ -348,7 +351,10 @@ class Panorama_api:
                 if obj.get(k):
                     obj.pop(k)
 
-            obj = {"entry": obj}
+            obj = {"entry": obj}    # Still has ['entry'], fix later
+
+            if set_output:
+                return self.create_set_output(obj=obj["entry"], device_group=group, object_type=object_type)
 
             # logger.info(f"starting to create {obj['entry']['@name']}.")
             response = await self.post_request(url=url, params=params, data=obj)
@@ -367,4 +373,89 @@ class Panorama_api:
                 logger.error(
                     f"Failed to create {object_type}:{obj['entry']['@name']} in {group}:"
                 )
-            return obj
+
+    @staticmethod
+    def format_object_type(object_type: str):
+        if object_type == "addresses":
+            object_type_formatted = "address"
+        elif object_type == "address-groups":
+            object_type_formatted = "address-group"
+        elif object_type == "services":
+            object_type_formatted = "service"
+        elif object_type == "service-groups":
+            object_type_formatted = "service"
+        elif object_type == "tags":
+            object_type_formatted = "tag"
+        else:
+            print(f"Unsupported object type {object_type}")
+            sys.exit()
+        return object_type_formatted
+
+    @staticmethod
+    def create_set_output(obj, device_group, object_type):
+        obj_type_formatted = Panorama_api.format_object_type(object_type=object_type)
+
+        set_cmd = f"set device-group {device_group} {obj_type_formatted} '{obj['@name']}' "
+
+        if obj.get("tag"):
+            set_cmd += f"tag '{obj['tag']}' "
+        if obj.get("description"):
+            set_cmd += f"description '{obj['description']}' "
+
+        if object_type == "addresses":
+            if obj.get("fqdn"):
+                set_cmd += f"fqdn {obj['fqdn']}"
+            elif obj.get("ip-netmask"):
+                set_cmd += f"ip-netmask {obj['ip-netmask']}"
+            elif obj.get("ip-range"):
+                set_cmd += f"ip-range {obj['ip-range']}"
+            elif obj.get("ip-wildcard"):
+                set_cmd += f"ip-wildcard {obj['ip-wildcard']}"
+
+        elif object_type == "address-groups":
+            if obj.get("dynamic"):
+                pa_filter = obj["dynamic"]["filter"]
+                set_cmd += f"dynamic filter {pa_filter}"
+            elif obj.get("static"):
+                members = obj["static"]["member"]
+                if len(members) == 1:
+                    set_cmd += f"{members[0]}"
+                else:
+                    set_cmd += "[ "
+                    for member in members:
+                        set_cmd += f"'{member}' "
+                    set_cmd += "]"
+
+        elif object_type == "services":
+            protocol = obj["protocol"]
+            tcp_udp = next(iter(protocol))  # First key will be either 'tcp' or 'udp'
+            ports = protocol[tcp_udp]
+
+            set_cmd += f"{tcp_udp} "
+            if ports.get("source-port"):
+                set_cmd += f"source-port {ports['source-port']} "
+            set_cmd += f"port {ports['port']}"
+
+        elif object_type == "service-groups":
+            set_cmd += f"members [ "
+            members = obj["members"]
+            for member in members:
+                set_cmd += f"'{member}' "
+            set_cmd += "]"
+        elif object_type == "tags":
+            if obj.get("comments"):
+                set_cmd += f"comments '{obj['comments']}' "
+            if obj.get("color"):
+                set_cmd += f"color {obj['color']}"
+
+        return set_cmd
+
+    @staticmethod
+    def delete_set_output(name, device_group, object_type):
+        obj_type_formatted = Panorama_api.format_object_type(object_type=object_type)
+        if device_group == "shared":
+            set_cmd = f"delete {device_group} {obj_type_formatted} {name}"
+        else:
+            set_cmd = f"delete device-group {device_group} {obj_type_formatted} {name}"
+
+        return set_cmd

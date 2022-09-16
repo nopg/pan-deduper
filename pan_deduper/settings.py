@@ -21,4 +21,5 @@ TO_DEDUPE = [
 CLEANUP_DGS = (
     []
 )  # If you already have a parent, but want to move objects into a new parent device group
-MAX_CONCURRENT = 200  # Maximum concurrent api requests to Panorama (lower if you are getting 'Internal Errors'
+MAX_CONCURRENT = 10  # Maximum concurrent api requests to Panorama (lower if you are getting 'Internal Errors'
+SET_OUTPUT = False  # Set to True if you only want 'set command' output instead of pushing to Panorama
