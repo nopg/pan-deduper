@@ -1,5 +1,4 @@
 import pytest
-from lxml.etree import XMLSyntaxError
 
 import pan_deduper.settings as settings
 import pan_deduper.utils as utils
@@ -23,6 +22,113 @@ def test_format_objs_full():
     ]
     fmt_objs = utils.format_objs(objs=objs, device_group="test", names_only=False)
     assert isinstance(fmt_objs, list)
+
+
+def test_bunch_commands():
+    test_set_commands = {
+        "tags": [
+            "set device-group All-Devices tag 'tag1' color color1",
+            "set device-group All-Devices tag 'tag 2' color color2",
+            "delete device-group dg1 tag 'tag1'",
+            "delete shared tag 'tag1'",
+        ],
+        "addresses": [
+            "set device-group All-Devices address '1.1.1.1' ip-netmask 1.1.1.1/32",
+            "set device-group All-Devices address 'all ones' ip-netmask 1.1.1.1/32",
+            "set device-group All-Devices address 'test-fqdn' fqdn a.example.com",
+            "set device-group All-Devices address 'addr-tagged' tag 'tag1' ip-netmask 1.1.1.1/32",
+            "set device-group All-Devices address 'addr-tagged2' tag [ 'tag1' 'tag2' ] ip-netmask 1.1.1.1/32",
+            "delete device-group dg1 address '1.1.1.1'",
+            "delete device-group dg1 address 'all ones'",
+            "delete device-group dg1 address 'test-fqdn'",
+            "delete shared address '1.1.1.1'",
+            "delete shared address 'all ones'",
+            "delete shared address 'test-fqdn",
+        ],
+        "services": [
+            "set device-group All-Devices service 'tcp-443' protocol tcp port 443",
+            "set device-group All-Devices service 'udp-443' protocol udp port 443",
+            "set device-group All-Devices service 'src-40' protocol tcp source-port 40",
+            "set device-group All-Devices service 'src-40 dst 443' protocol tcp source-port 40 port 443",
+            "delete device-group dg2 service 'tcp-443'",
+            "delete device-group dg2 service 'src-40 dst 443'",
+        ],
+        "address-groups": [
+            "set device-group All-Devices address-group '2.2.2.2' static '2.2.2.2/32'",
+            "set device-group All-Devices address-group 'addr group' static [ '1.1.1.1' '2.2.2.2' ]",
+            "set device-group All-Devices address-group dynamic filter 'myfilter'",
+            "delete device-group dg3 address-group 'addr group'",
+        ],
+        "service-groups": [
+            "set device-group All-Devices service-group 'tcp-udp-443' members [ 'tcp-443' 'udp-443' ]",
+            "delete shared service-group 'tcp-udp-443'",
+        ],
+    }
+    correct_set_output = {
+        "tags": {
+            "tag1": [
+                "set device-group All-Devices tag 'tag1' color color1",
+                "delete device-group dg1 tag 'tag1'",
+                "delete shared tag 'tag1'",
+            ],
+            "tag 2": ["set device-group All-Devices tag 'tag 2' color color2"],
+        },
+        "addresses": {
+            "1.1.1.1": [
+                "set device-group All-Devices address '1.1.1.1' ip-netmask 1.1.1.1/32",
+                "delete device-group dg1 address '1.1.1.1'",
+                "delete shared address '1.1.1.1'",
+            ],
+            "all ones": [
+                "set device-group All-Devices address 'all ones' ip-netmask 1.1.1.1/32",
+                "delete device-group dg1 address 'all ones'",
+                "delete shared address 'all ones'",
+            ],
+            "test-fqdn": [
+                "set device-group All-Devices address 'test-fqdn' fqdn a.example.com",
+                "delete device-group dg1 address 'test-fqdn'",
+            ],
+            "addr-tagged": [
+                "set device-group All-Devices address 'addr-tagged' tag 'tag1' ip-netmask 1.1.1.1/32",
+            ],
+            "addr-tagged2": [
+                "set device-group All-Devices address 'addr-tagged2' tag [ 'tag1' 'tag2' ] ip-netmask 1.1.1.1/32",
+            ],
+        },
+        "services": {
+            "tcp-443": [
+                "set device-group All-Devices service 'tcp-443' protocol tcp port 443",
+                "delete device-group dg2 service 'tcp-443'",
+            ],
+            "udp-443": [
+                "set device-group All-Devices service 'udp-443' protocol udp port 443"
+            ],
+            "src-40": [
+                "set device-group All-Devices service 'src-40' protocol tcp source-port 40"
+            ],
+            "src-40 dst 443": [
+                "set device-group All-Devices service 'src-40 dst 443' protocol tcp source-port 40 port 443",
+                "delete device-group dg2 service 'src-40 dst 443'",
+            ],
+        },
+        "address-groups": {
+            "2.2.2.2": [
+                "set device-group All-Devices address-group '2.2.2.2' static '2.2.2.2/32'"
+            ],
+            "addr group": [
+                "set device-group All-Devices address-group 'addr group' static [ '1.1.1.1' '2.2.2.2' ]",
+                "delete device-group dg3 address-group 'addr group'",
+            ],
+        },
+        "service-groups": {
+            "tcp-udp-443": [
+                "set device-group All-Devices service-group 'tcp-udp-443' members [ 'tcp-443' 'udp-443' ]",
+                "delete shared service-group 'tcp-udp-443'",
+            ]
+        },
+    }
+    output = utils.bunch_commands(test_set_commands)
+    assert output == correct_set_output
 
 
 def test_find_object():
@@ -65,3 +171,7 @@ def test_find_object():
     with pytest.raises(SystemExit) as error:
         obj = utils.find_object(**my_broken_args)
     assert error.value.code == 1
+
+
+if __name__ == "__main__":
+    test_bunch_commands()

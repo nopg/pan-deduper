@@ -10,6 +10,7 @@ clean:
 	rm -f settings.py
 	rm -f deduper.log
 	rm -f deep-dupes-*.json
+	rm -f set-commands-*.txt
 
 test:
 	python -m pytest .

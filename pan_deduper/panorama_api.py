@@ -1,19 +1,16 @@
 """pan_deduper.panorama_api"""
-import asyncio
 import logging
 import sys
-from typing import Any, Dict, List, Union, Tuple
+from typing import Any, Dict, List, Union
 
 import httpx
 from lxml import etree
-
-from pan_deduper import settings
 
 API_VERSION = "v10.1"
 logger = logging.getLogger("utils")
 
 
-class Panorama_api:
+class PanoramaApi:
     """Panorama api"""
 
     def __init__(self, panorama: str, username: str, password: str) -> None:
@@ -245,14 +242,19 @@ class Panorama_api:
 
         return None
 
-    async def delete_object(self, limit, **kwargs) -> Union[None, Tuple]:
+    async def delete_object(self, limit, **kwargs) -> Union[None, str]:
         async with limit:
             result = await self._delete_object(**kwargs)
             return result
 
     async def _delete_object(
-        self, object_type: str, name: str, set_output: bool, device_group: str = None, params: Dict = None,
-    ) -> Union[None, Tuple]:
+        self,
+        object_type: str,
+        name: str,
+        set_output: bool,
+        device_group: str = None,
+        params: Dict = None,
+    ) -> Union[None, str]:
         """
         Delete objects
 
@@ -279,6 +281,7 @@ class Panorama_api:
         else:
             print(f"Unsupported object_type sent: {object_type}")
             sys.exit(0)
+
         if not params:
             params = {
                 "location": "device-group",
@@ -290,7 +293,11 @@ class Panorama_api:
             params["name"] = name
 
         if set_output:
-            return self.delete_set_output(name=name, device_group=device_group, object_type=object_type)
+            # if object_type == "tags" and device_group == "shared":
+            #     breakpoint()
+            return self.delete_set_output(
+                name=name, device_group=device_group, object_type=object_type
+            )
 
         # logger.info(f"starting to delete {name}.")
         response = await self.delete_request(url=url, params=params)
@@ -308,12 +315,14 @@ class Panorama_api:
 
         return None
 
-    async def create_object(self, limit, **kwargs) -> Union[None, Tuple]:
+    async def create_object(self, limit, **kwargs) -> Union[None, str]:
         async with limit:
             result = await self._create_object(**kwargs)
             return result
 
-    async def _create_object(self, object_type: str, obj: Dict, device_group: List, set_output: bool) -> Union[None, str]:
+    async def _create_object(
+        self, object_type: str, obj: Dict, device_group: List, set_output: bool
+    ) -> Union[None, str]:
         """
         Create object
 
@@ -351,10 +360,12 @@ class Panorama_api:
                 if obj.get(k):
                     obj.pop(k)
 
-            obj = {"entry": obj}    # Still has ['entry'], fix later
+            obj = {"entry": obj}  # Still has ['entry'], fix later
 
             if set_output:
-                return self.create_set_output(obj=obj["entry"], device_group=group, object_type=object_type)
+                return self.create_set_output(
+                    obj=obj["entry"], device_group=group, object_type=object_type
+                )
 
             # logger.info(f"starting to create {obj['entry']['@name']}.")
             response = await self.post_request(url=url, params=params, data=obj)
@@ -383,7 +394,7 @@ class Panorama_api:
         elif object_type == "services":
             object_type_formatted = "service"
         elif object_type == "service-groups":
-            object_type_formatted = "service"
+            object_type_formatted = "service-group"
         elif object_type == "tags":
             object_type_formatted = "tag"
         else:
@@ -393,12 +404,18 @@ class Panorama_api:
 
     @staticmethod
     def create_set_output(obj, device_group, object_type):
-        obj_type_formatted = Panorama_api.format_object_type(object_type=object_type)
+        obj_type_formatted = PanoramaApi.format_object_type(object_type=object_type)
 
-        set_cmd = f"set device-group {device_group} {obj_type_formatted} '{obj['@name']}' "
+        set_cmd = (
+            f"set device-group {device_group} {obj_type_formatted} '{obj['@name']}' "
+        )
 
         if obj.get("tag"):
-            set_cmd += f"tag '{obj['tag']}' "
+            set_cmd += "tag [ "
+            for member in obj["tag"]["member"]:
+                set_cmd += f"'{member}' "
+            set_cmd += "] "
+
         if obj.get("description"):
             set_cmd += f"description '{obj['description']}' "
 
@@ -419,7 +436,7 @@ class Panorama_api:
             elif obj.get("static"):
                 members = obj["static"]["member"]
                 if len(members) == 1:
-                    set_cmd += f"{members[0]}"
+                    set_cmd += f"'{members[0]}'"
                 else:
                     set_cmd += "[ "
                     for member in members:
@@ -431,14 +448,14 @@ class Panorama_api:
             tcp_udp = next(iter(protocol))  # First key will be either 'tcp' or 'udp'
             ports = protocol[tcp_udp]
 
-            set_cmd += f"{tcp_udp} "
+            set_cmd += f"protocol {tcp_udp} "
             if ports.get("source-port"):
                 set_cmd += f"source-port {ports['source-port']} "
             set_cmd += f"port {ports['port']}"
 
         elif object_type == "service-groups":
             set_cmd += f"members [ "
-            members = obj["members"]
+            members = obj["members"]["member"]
             for member in members:
                 set_cmd += f"'{member}' "
             set_cmd += "]"
@@ -452,10 +469,12 @@ class Panorama_api:
 
     @staticmethod
     def delete_set_output(name, device_group, object_type):
-        obj_type_formatted = Panorama_api.format_object_type(object_type=object_type)
+        obj_type_formatted = PanoramaApi.format_object_type(object_type=object_type)
         if device_group == "shared":
-            set_cmd = f"delete {device_group} {obj_type_formatted} {name}"
+            set_cmd = f"delete {device_group} {obj_type_formatted} '{name}'"
         else:
-            set_cmd = f"delete device-group {device_group} {obj_type_formatted} {name}"
+            set_cmd = (
+                f"delete device-group {device_group} {obj_type_formatted} '{name}'"
+            )
 
         return set_cmd

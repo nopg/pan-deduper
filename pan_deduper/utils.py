@@ -5,10 +5,11 @@ import importlib.util
 import inspect
 import json
 import logging
+import re
 import sys
 from datetime import datetime
 from itertools import combinations
-from typing import Any, Dict, List, Set, Union, Tuple
+from typing import Any, Dict, List, Set, Tuple, Union
 
 import xmltodict
 from deepdiff import DeepDiff
@@ -16,7 +17,7 @@ from lxml import etree
 from lxml.etree import XMLSyntaxError, XPathEvalError
 from rich.pretty import pprint
 
-from pan_deduper.panorama_api import Panorama_api
+from pan_deduper.panorama_api import PanoramaApi
 
 # Logging setup:
 logger = logging.getLogger("utils")
@@ -73,6 +74,7 @@ async def run_deduper(
         panorama:   panorama IP/FQDN
         username:   panorama username
         password:   panorama password
+        deep:       deep check or not
     """
     logger.info("")
     logger.info("----Running deduper---")
@@ -84,7 +86,7 @@ async def run_deduper(
         my_objs = await get_objects_xml(configstr, deep)
 
     elif panorama:
-        pan = Panorama_api(panorama=panorama, username=username, password=password)
+        pan = PanoramaApi(panorama=panorama, username=username, password=password)
         await pan.login()
         # settings.EXISTING_PARENT_DGS = await pan.get_parent_dgs()
         # print("Parent Device Groups:")
@@ -154,9 +156,7 @@ async def run_deduper(
             if answer in ("yes", "y"):
                 await object_creation_deletion(pan=pan, results=results)
         elif settings.SET_OUTPUT:
-            answer = ask_user(
-                "Ready to create set commands...continue? (y/n): "
-            )
+            answer = ask_user("Ready to create set commands...continue? (y/n): ")
             if answer in ("yes", "y"):
                 await create_set_output(pan=pan, results=results)
 
@@ -199,7 +199,7 @@ def get_any_tags(objs):
     return tags
 
 
-async def create_tags(tags, pan: Panorama_api, set_output: bool):
+async def create_tags(tags, pan: PanoramaApi, set_output: bool):
     """
     Create the tags
 
@@ -231,9 +231,17 @@ async def create_tags(tags, pan: Panorama_api, set_output: bool):
                 object_type="tags", device_group=dg, params=params
             )
             if not full_tag:
-                error = (
-                    f"Error pulling tag {tag} from {dg}, must be inherited, skipping"
-                )
+                # # Check shared
+                # params = {"location": "shared", "name": tag}
+                # full_tag = await pan.get_objects(
+                #     object_type="tags",  params=params
+                # )
+                # if full_tag:
+                #     print(f"found {full_tag=} in shared")
+                #     full_tag[0]["@name"] = "FOUND_IN_SHARED-" + full_tag[0]["@name"]
+                #     print(f"found {full_tag=} in shared")
+                # else:
+                error = f"Error pulling tag {tag} from {dg}, must be complex hierarchy, please fix manually."
                 print(error)
                 logger.error(error)
                 continue
@@ -244,14 +252,14 @@ async def create_tags(tags, pan: Panorama_api, set_output: bool):
                     object_type="tags",
                     obj=full_tag,
                     device_group=settings.NEW_PARENT_DEVICE_GROUP,
-                    set_output=set_output
+                    set_output=set_output,
                 )
             )
 
-    await asyncio.gather(*coroutines)
+    return await asyncio.gather(*coroutines)
 
 
-async def delete_tags(tags, pan: Panorama_api, set_output: bool):
+async def delete_tags(tags, pan: PanoramaApi, set_output: bool):
     """
     Delete the tags
     Args:
@@ -263,16 +271,25 @@ async def delete_tags(tags, pan: Panorama_api, set_output: bool):
     coroutines = []
     for dg, tags in tags.items():
         for tag in tags:
+            params = None
+            if tag.startswith("FOUND_IN_SHARED-"):
+                tag = tag.replace("FOUND_IN_SHARED", "")
+                params = {"location": "shared"}
             coroutines.append(
                 pan.delete_object(
-                    limit=limit, object_type="tags", name=tag, device_group=dg, set_output=set_output
+                    limit=limit,
+                    object_type="tags",
+                    name=tag,
+                    device_group=dg,
+                    params=params,
+                    set_output=set_output,
                 )
             )
 
-    await asyncio.gather(*coroutines)
+    return await asyncio.gather(*coroutines)
 
 
-async def cleanup_tags(tags, pan: Panorama_api, set_output: bool):
+async def cleanup_tags(tags, pan: PanoramaApi, set_output: bool):
     """
     Can't create the objects in Parent-DG if the Tag doesn't also exist there
 
@@ -281,15 +298,84 @@ async def cleanup_tags(tags, pan: Panorama_api, set_output: bool):
         pan: Panorama API Object
         set_output: set commands or no?
     """
-    await create_tags(tags=tags, pan=pan, set_output=set_output)
-    await delete_tags(tags=tags, pan=pan, set_output=set_output)
+    tag_commands = []
+    tags_create = await create_tags(tags=tags, pan=pan, set_output=set_output)
+    tags_delete = await delete_tags(tags=tags, pan=pan, set_output=set_output)
+
+    if set_output:
+        for tag in tags_create:
+            tag_commands.append(tag)
+        for tag in tags_delete:
+            tag_commands.append(tag)
+        return tag_commands
 
 
-async def get_create_push_data(pan: Panorama_api):
+def reorganize_commands(commands: List, rec):
+    obj_to_command = {}
+    for cmd in commands:
+        match = rec.search(cmd)
+        if match:
+            attrs = match.groupdict()
+            name = attrs["obj_name"]
+            if not obj_to_command.get(name):
+                obj_to_command[name] = []
+
+            obj_to_command[name].append(cmd)
+
+    return obj_to_command
+
+
+def bunch_commands(set_commands: Dict):
+    re_pattern = r"""
+        (?P<set_del>(set|delete))\s                                         # Set or Delete
+        ((device-group\s(?P<device_group>\S+)?)                             # Device Group
+        |(shared))\s                                                        # Or Shared
+        (?P<obj_type>(address-group|address|service-group|service|tag))\s   # Object-type
+        (\'(?P<obj_name>[^']+)\')                                           # Object Name ([^'] means anything but ')
+        (?:\.+)?                                                            # Ignore anything extra
+    """
+    rec = re.compile(re_pattern, re.X)
+
+    bunched_commands = {}
+    for obj_type, commands in set_commands.items():
+        if commands:
+            obj_to_cmd = reorganize_commands(commands, rec)
+            bunched_commands[obj_type] = obj_to_cmd
+
+    return bunched_commands
+
+
+async def create_set_output(pan: PanoramaApi, results) -> None:
+    print("\n\nCreating set output...\n\n")
+    set_commands = await object_creation_deletion(
+        pan=pan, results=results, set_output=True
+    )
+
+    # Create the 'one' file
+    with open("set-commands-all.txt", "w") as fin:
+        for obj_type, commands in set_commands.items():
+            if commands:
+                for cmd in commands:
+                    fin.write(f"{cmd}\n")
+
+    print("\n\n\tSet commands at set-commands-obj-type.txt.")
+
+    bunched_commands = bunch_commands(set_commands)
+
+    for obj_type, obj_name in bunched_commands.items():
+        with open(f"set-commands-{obj_type}.txt", "w") as fin:
+            for obj, commands in bunched_commands[obj_type].items():
+                if commands:
+                    for cmd in commands:
+                        fin.write(f"{cmd}\n")
+                    fin.write("\n")
+
+
+async def get_create_push_data(pan: PanoramaApi):
     if not settings.NEW_PARENT_DEVICE_GROUP:
         print("\n\nYou didn't give me a parent device group to add objects to!!")
         print("Check settings.py\n\n")
-        sys.exit(1)
+        sys.exit()
 
     print("Getting full objects...\n")
     # Get full objects so we can create them elsewhere
@@ -301,27 +387,9 @@ async def get_create_push_data(pan: Panorama_api):
     return my_objs, my_tags
 
 
-async def create_set_output(pan: Panorama_api, results) -> None:
-    print("\n\nCreating set output...\n\n")
-    tags_set, creates_set, deletes_set = await object_creation_deletion(pan=pan, results=results, set_output = True)
-
-    if tags_set:
-        with open("set-commands-tags.txt", "w") as fin:
-            for cmd in tags_set:
-                fin.write(f"{cmd}\n")
-    if creates_set:
-        with open("set-commands-creates.txt", "w") as fin:
-            for cmd in creates_set:
-                fin.write(f"{cmd}\n")
-    if deletes_set:
-        with open("set-commands-deletes.txt", "w") as fin:
-            for cmd in deletes_set:
-                fin.write(f"{cmd}\n")
-
-    print("Set commands at set-commands-xxx.txt.")
-
-
-async def object_creation_deletion(pan: Panorama_api, results, set_output: bool = False) -> Union[None, Tuple]:
+async def object_creation_deletion(
+    pan: PanoramaApi, results, set_output: bool = False
+) -> Union[None, Dict]:
     """
     Create and delete objects or output set commands
 
@@ -333,51 +401,75 @@ async def object_creation_deletion(pan: Panorama_api, results, set_output: bool 
 
     """
     my_objs, my_tags = await get_create_push_data(pan=pan)
-    tags_set, creates_set, deletes_set = [], [], []
+    set_commands = {"tags": []}
 
     # Cleanup tags first
     tags = await cleanup_tags(tags=my_tags, pan=pan, set_output=set_output)
     if tags:
-        tags_set += tags
+        set_commands["tags"] += tags
 
-    print("\nCreating objects...")
-    creates = await do_the_creates(
-        object_types=["addresses", "services"],
-        pan=pan,
-        results=results,
-        objs_list=my_objs,
-        set_output=set_output
-    )
-    if creates:
-        creates_set += creates
+    if set_output:
+        for each in settings.TO_DEDUPE:
+            set_commands[each] = []
+            # Creates (set commands)
+            cmds = await do_the_creates(
+                object_types=[each],
+                pan=pan,
+                results=results,
+                objs_list=my_objs,
+                set_output=set_output,
+            )
+            for cmd in cmds:
+                set_commands[each].append(cmd)
+            # Deletes (set commands)
+            cmds = await do_the_deletes(
+                object_types=[each], pan=pan, results=results, set_output=set_output
+            )
+            # for cmd in cmds:
+            #     set_commands[each].append(cmd)
+            set_commands[each] += cmds
 
-    print("\nCreating object groups...")
-    creates = await do_the_creates(
-        object_types=["address-groups", "service-groups"],
-        pan=pan,
-        results=results,
-        objs_list=my_objs,
-        set_output=set_output
-    )
-    if creates:
-        creates_set += creates
+    else:  # Actually pushing to Panorama
+        print("\nCreating objects...")
+        await do_the_creates(
+            object_types=["addresses", "services"],
+            pan=pan,
+            results=results,
+            objs_list=my_objs,
+            set_output=set_output,
+        )
 
-    # Now do the deletes
-    print("\nDeleting object groups...")
-    deletes_set = await do_the_deletes(
-        object_types=["address-groups", "service-groups"], pan=pan, results=results, set_output=set_output
-    )
-    print("\nDeleting objects...")
-    deletes = await do_the_deletes(
-        object_types=["addresses", "services"], pan=pan, results=results, set_output=set_output
-    )
-    if deletes:
-        deletes_set += deletes
+        print("\nCreating object groups...")
+        await do_the_creates(
+            object_types=["address-groups", "service-groups"],
+            pan=pan,
+            results=results,
+            objs_list=my_objs,
+            set_output=set_output,
+        )
+
+        # Now do the deletes
+        print("\nDeleting object groups...")
+        await do_the_deletes(
+            object_types=["address-groups", "service-groups"],
+            pan=pan,
+            results=results,
+            set_output=set_output,
+        )
+        print("\nDeleting objects...")
+        await do_the_deletes(
+            object_types=["addresses", "services"],
+            pan=pan,
+            results=results,
+            set_output=set_output,
+        )
 
     # Now lets delete shared (to delete!!)
     if settings.DELETE_SHARED_OBJECTS:
         if set_output:
-            answer = ask_user("\n\tSet commands created..create 'shared' delete commands also? (y/n): ")
+            answer = ask_user(
+                "\n\tSet commands created..create 'shared' delete commands also? (y/n): "
+            )
         else:
             answer = ask_user("\n\tAll cleaned up...cleanup 'shared' also? (y/n): ")
         if answer in ("yes", "y"):
@@ -393,29 +485,46 @@ async def object_creation_deletion(pan: Panorama_api, results, set_output: bool 
             if not shared_deletes:
                 print("\tNothing to delete")
             else:
-                print("Deleting from 'shared'...")
-                deletes = await do_the_deletes_shared(
-                    object_types=["address-groups", "service-groups"],
-                    pan=pan,
-                    objects=shared_deletes,
-                    set_output=set_output
-                )
-                if deletes:
-                    deletes_set += deletes
+                if set_output:
+                    for each in settings.TO_DEDUPE + ["tags"]:
+                        if set_commands.get(each):
+                            # SOME duplicate must exist before looking at shared
+                            if isinstance(set_commands, dict):
+                                cmds = await do_the_deletes_shared(
+                                    object_types=[each],
+                                    pan=pan,
+                                    objects=shared_deletes,
+                                    set_output=set_output,
+                                )
+                                set_commands[each] += cmds
+                else:
+                    print("Deleting from 'shared'...")
+                    await do_the_deletes_shared(
+                        object_types=["tags"],
+                        pan=pan,
+                        objects=shared_deletes,
+                        set_output=set_output,
+                    )
+                    await do_the_deletes_shared(
+                        object_types=["address-groups", "service-groups"],
+                        pan=pan,
+                        objects=shared_deletes,
+                        set_output=set_output,
+                    )
 
-                deletes = await do_the_deletes_shared(
-                    object_types=["addresses", "services"],
-                    pan=pan,
-                    objects=shared_deletes,
-                    set_output = set_output
-                )
-                if deletes:
-                    deletes_set += deletes
+                    await do_the_deletes_shared(
+                        object_types=["addresses", "services"],
+                        pan=pan,
+                        objects=shared_deletes,
+                        set_output=set_output,
+                    )
 
-    return tags_set, creates_set, deletes_set
+    # return tags_set, creates_set, deletes_set
+    if set_commands:
+        return set_commands
 
 
-async def set_device_groups(*, config=None, pan: Panorama_api = None, deep: bool):
+async def set_device_groups(*, config=None, pan: PanoramaApi = None, deep: bool):
     """
     Set the device groups that will be searched through
 
@@ -423,6 +532,7 @@ async def set_device_groups(*, config=None, pan: Panorama_api = None, deep: bool
         only 1 of below should be provided
         config: xml config string (if provided)
         pan: panorama object (if provided)
+        deep: deep check or not
     Returns:
         N/A
     Raises:
@@ -489,7 +599,7 @@ def ask_user(question: str):
 
 
 async def get_objects_panorama(
-    pan: Panorama_api, names_only: bool = True, shared: bool = False
+    pan: PanoramaApi, names_only: bool = True, shared: bool = False
 ):
     """
     Get objects from Panorama API
@@ -517,7 +627,7 @@ async def get_objects_panorama(
 
 
 async def _get_objects_panorama(
-    pan: Panorama_api, object_type: str, names_only: bool = True, shared: bool = False
+    pan: PanoramaApi, object_type: str, names_only: bool = True, shared: bool = False
 ):
     my_objs = {object_type: {}}
 
@@ -737,9 +847,9 @@ def find_duplicates_deep(my_objects, xml: Union[None, str]):
                             temp1.update(dupe_obj1)
                             temp2.update(dupe_obj2)
                             diffs.append([temp1, temp2])
-                            print(
-                                f"Deep check found {temp1.get('@name')} in {temp1.get('@device-group')} and {temp2.get('@name')} in {temp2.get('@device-group')}"
-                            )
+                            # print(
+                            #     f"Deep check found {temp1.get('@name')} in {temp1.get('@device-group')} and {temp2.get('@name')} in {temp2.get('@device-group')}"
+                            # )
     return duplicates, diffs
 
 
@@ -759,9 +869,8 @@ def find_duplicates_shared(shared_objs, dupes) -> Dict[str, List]:
     for object_type in dupes:
         shared_duplicates[object_type] = []
         for obj_name in dupes[object_type]:
-            # print(f"{obj_name=}\t {shared_objs[object_type]['shared']}")
             if obj_name in shared_objs[object_type]["shared"]:
-                print(f"\n\tFound duplicate in shared: {obj_name}")
+                # print(f"\n\tFound duplicate in shared: {obj_name}")
                 shared_duplicates[object_type].append(obj_name)
 
     return shared_duplicates
@@ -800,13 +909,17 @@ def find_object(objs_list, object_type, device_group, name):
 
 
 async def do_the_creates(
-    pan: Panorama_api, results: Dict, object_types: List[str], objs_list: Any, set_output: bool
+    pan: PanoramaApi,
+    results: Dict,
+    object_types: List[str],
+    objs_list: Any,
+    set_output: bool,
 ) -> Union[None, Tuple]:
     """
     Create the objects
 
     Args:
-        pan: panorama_api object
+        pan: PanoramaApi object
         results: objects (duplicates) to be created (as part of 'move')
         object_types: object types to be created (used to create objects before groups)
         objs_list: full object values so that we can clone them
@@ -836,7 +949,7 @@ async def do_the_creates(
                         object_type=object_type,
                         obj=dupe_obj,
                         device_group=settings.NEW_PARENT_DEVICE_GROUP,
-                        set_output = set_output
+                        set_output=set_output,
                     )
                 )
 
@@ -844,13 +957,13 @@ async def do_the_creates(
 
 
 async def do_the_deletes(
-    pan: Panorama_api, results: Dict, object_types: List[str], set_output: bool
+    pan: PanoramaApi, results: Dict, object_types: List[str], set_output: bool
 ) -> Union[None, Tuple]:
     """
     Delete the objects
 
     Args:
-        pan: panorama_api object
+        pan: PanoramaApi object
         results: objects (duplicates) to be deleted
         object_types: object types to be deleted (used to send groups in before objects)
         set_output: set commands or not?
@@ -870,7 +983,7 @@ async def do_the_deletes(
                             object_type=object_type,
                             name=dupe,
                             device_group=group,
-                            set_output=set_output
+                            set_output=set_output,
                         )
                     )
 
@@ -878,13 +991,13 @@ async def do_the_deletes(
 
 
 async def do_the_deletes_shared(
-    pan: Panorama_api, objects: Dict, object_types: List[str], set_output: bool
-) -> None:
+    pan: PanoramaApi, objects: Dict, object_types: List[str], set_output: bool
+) -> Union[None, Tuple]:
     """
     Delete the shared objects
 
     Args:
-        pan: panorama_api object
+        pan: PanoramaApi object
         objects: objects (duplicates) to be deleted
         object_types: object types to be deleted (used to send groups in before objects)
         set_output: set commands or not?
@@ -897,11 +1010,15 @@ async def do_the_deletes_shared(
             for dupe in objects[object_type]:
                 coroutines.append(
                     pan.delete_object(
-                        limit=limit, object_type=object_type, name=dupe, params=params, set_output=set_output
+                        limit=limit,
+                        object_type=object_type,
+                        name=dupe,
+                        params=params,
+                        set_output=set_output,
                     )
                 )
 
-    await asyncio.gather(*coroutines)
+    return await asyncio.gather(*coroutines)
 
 
 def write_output(filename, output):
@@ -922,5 +1039,5 @@ def write_output(filename, output):
     # Write output to file
     json_str = json.dumps(output, indent=4, cls=SetEncoder, sort_keys=True)
     dt = datetime.now().strftime("%Y-%m-%d::%H:%M:%S")
-    with open(f"{filename}-{dt}.json", "w", encoding="utf8") as f:
-        f.write(json_str)
+    with open(f"{filename}-{dt}.json", "w", encoding="utf8") as fout:
+        fout.write(json_str)

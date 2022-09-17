@@ -8,6 +8,7 @@ This is for a Palo Alto Panorama deployment.
 ## Notes
 Death to 'shared'!! Use your own 'parent' device group instead.
 
+- Currently tested on Panorama 10.1+ only, no plans on supporting anything below 10.1.
 - If for some reason you want objects created in two 'parents', just put as many 'new parents' as you need
   in the list at settings.py 
 - Minimum duplicates can be set to 1, we match on DUPLICATES, not objects.
@@ -20,6 +21,7 @@ Death to 'shared'!! Use your own 'parent' device group instead.
 - As usual when making major changes, get a Panorama named snapshot BEFORE pushing any changes. Sometimes it 
   can also be helpful to use this snapshot to check out the value of objects as they existed before the 
   changes were pushed, if errors occurred however you don't want to completely revert.
+- Error codes/details found [here!](./errors.md)
 
 
 
@@ -78,9 +80,9 @@ Grab objects from .xml file:
 
 TODO:
 
-should parent dg automatically be excluded?\
+shared blah\
+deep default, other deep?\
 move from shared to parent dg---separate command, not dupe specific?\
 make httpx timeout even longer?(and on httpx.client)\
-logging on 'gets'?\
-better cleanup of inherited tags?
+
 

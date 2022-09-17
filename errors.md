@@ -15,4 +15,4 @@ More details on error messages you might see in deduper.log
 - Reference Not Zero &emsp; - &emsp; Object still in use elsewhere so cannot delete
   - This can sometimes be caused by the new object in the Parent DG failing to be created.
 - Invalid Object &emsp; - &emsp; Panorama didn't like what we sent, likely a bug.
-- Internal Error &emsp; - &emsp; Panorama failed to process the request.
+- Internal Error &emsp; - &emsp; Panorama failed to process the request. Lower MAX_CONCURRENT to below 10.
