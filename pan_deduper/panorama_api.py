@@ -436,9 +436,9 @@ class PanoramaApi:
             elif obj.get("static"):
                 members = obj["static"]["member"]
                 if len(members) == 1:
-                    set_cmd += f"'{members[0]}'"
+                    set_cmd += f"static '{members[0]}'"
                 else:
-                    set_cmd += "[ "
+                    set_cmd += "static [ "
                     for member in members:
                         set_cmd += f"'{member}' "
                     set_cmd += "]"

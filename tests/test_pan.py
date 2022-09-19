@@ -73,8 +73,8 @@ correct_set_commands_create = {
         "set device-group dg1 address '3.3.3.0/25' ip-range 3.3.3.0-3.3.3.127",
     ],
     "address-groups": [
-        "set device-group dg1 address-group 'grp1' description 'my description' 'member1'",
-        "set device-group dg1 address-group 'grp2' [ 'member1' 'member2' 'member 3' ]",
+        "set device-group dg1 address-group 'grp1' description 'my description' static 'member1'",
+        "set device-group dg1 address-group 'grp2' static [ 'member1' 'member2' 'member 3' ]",
     ],
     "services": [
         "set device-group dg1 service 'tcp-443' protocol tcp port 443",
