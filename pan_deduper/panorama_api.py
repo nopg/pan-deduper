@@ -86,7 +86,7 @@ class PanoramaApi:
 
         try:
             response = await self.session[self.apikey].get(
-                url=url, headers=headers, params=params
+                url=url, headers=headers, params=params, timeout=30
             )
             return response.json()
         except httpx.RequestError as e:
@@ -229,6 +229,10 @@ class PanoramaApi:
             url = "Objects/ServiceGroups"
         elif object_type == "tags":
             url = "Objects/Tags"
+        elif object_type == "secrules-pre":
+            url = "Policies/SecurityPreRules"
+        elif object_type == "secrules-post":
+            url = "Policies/SecurityPostRules"
         else:
             print(f"Unsupported object_type sent: {object_type}")
             sys.exit(0)

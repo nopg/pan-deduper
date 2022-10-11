@@ -58,6 +58,152 @@ except (FileNotFoundError, ImportError, ModuleNotFoundError):
     sys.exit(0)
 
 
+# def sec_rules_xml(configstr: str):
+#     rules = get_sec_rules_xml(configstr, "pre")
+#     t = rules[0]
+#     #print(dir(rules[0]))
+#     #breakpoint()
+#     #print(t.items)
+#     for child in t.getchildren():
+#         print(child.tag)
+#         member = child.find('member')
+#         breakpoint()
+#         if member is not None:
+#             print(member.text)
+#         else:
+#             print(child.text)
+
+
+async def get_sec_rules(pan: PanoramaApi, device_group: str):
+    rules = {device_group: {}}
+    rules[device_group]["pre"] = await pan.get_objects(object_type="secrules-pre", device_group=device_group)
+    rules[device_group]["post"] = await pan.get_objects(object_type="secrules-post", device_group=device_group)
+
+    return rules
+
+
+def check_sec_rules(rules: Dict):
+    rule_updates = {}
+    for i1, rule1 in enumerate(rules):
+        if rule1['@loc'] != rule1['@device-group']:
+            continue
+        for i2, rule2 in enumerate(rules[i1:]):  # Only check rules BELOW my current rule
+            name1 = rule1["@name"]
+            name2 = rule2["@name"]
+            action1 = rule1['action']
+            action2 = rule2['action']
+            src_zone1 = set(rule1['from']['member'])
+            src_zone2 = set(rule2['from']['member'])
+            destination1 = set(rule1['destination']['member'])
+            destination2 = set(rule2['destination']['member'])
+            service1 = set(rule1['service']['member'])
+            service2 = set(rule2['service']['member'])
+            application1 = set(rule1['application']['member'])
+            application2 = set(rule2['application']['member'])
+
+            # Continue if same rule, break if I hit a deny and start on next rule
+            if name1 == name2:
+                continue
+            if action2 == "deny" and action1 != "deny":
+                break
+            if rule2['@loc'] != rule2['@device-group']:  # If it was inherited
+                continue
+
+            if action1 == action2:
+                if destination2 == destination1:
+                    if service1 == service2:
+                        if application1 == application2:
+                            if src_zone2 == src_zone1:
+                                if not rule_updates.get(rule1['@name']):
+                                    rule_updates[rule1['@name']] = [rule2]
+                                else:
+                                    rule_updates[rule1['@name']].append(rule2)
+
+    return rule_updates
+
+
+def create_set_rule_output(updates, rulebase):
+    output = []
+    deleted_rules = []
+    if rulebase == "pre":
+        prepost = "pre-rulebase"
+    else:
+        prepost = "post-rulebase"
+    for rule, additions in updates.items():
+        if rule in deleted_rules:
+            continue
+        for add in additions:
+            sets = []
+            deletes = []
+            source = add['source']['member']
+            for item in source:
+                if item == 'any':
+                    delete_cmd = (
+                        f"delete device-group {add['@device-group']} {prepost} security rules '{rule}' source"
+                    )
+                    deletes.append(delete_cmd)
+                set_cmd = (
+                    f"set device-group {add['@device-group']} {prepost} security rules '{rule}' source {item}"
+                )
+                sets.append(set_cmd)
+
+            # Now delete the old rule
+            delete_cmd = (
+                f"delete device-group {add['@device-group']} {prepost} security rules '{add['@name']}'"
+            )
+            deletes.append(delete_cmd)
+            deleted_rules.append(add['@name'])
+
+            output += sets + deletes
+        output.append('\n')
+
+    return output
+
+
+async def run_secduper(
+    panorama: str = None,
+    username: str = None,
+    password: str = None,
+) -> None:
+
+    pan = PanoramaApi(panorama=panorama, username=username, password=password)
+    await pan.login()
+
+    my_rules = {}
+    if not settings.DEVICE_GROUPS:
+        settings.DEVICE_GROUPS = await pan.get_device_groups()
+    coroutines = []
+    for group in settings.DEVICE_GROUPS:
+        coroutines.append(get_sec_rules(pan=pan, device_group=group))
+
+    my_rules_temp = await asyncio.gather(*coroutines)
+    my_rules = {}
+    for group in my_rules_temp:
+        my_rules.update(group)
+
+    cmds = {}
+    for device_group, rules in my_rules.items():
+        cmds[device_group] = {}
+        print(f"checking {device_group} Pre")
+        updates = check_sec_rules(rules["pre"])
+        cmds[device_group]["pre"] = [f"--------- PRE-RULEBASE ---------"]
+        cmds[device_group]["pre"] += create_set_rule_output(updates, "pre")
+
+        print(f"checking {device_group} Post")
+        updates = check_sec_rules(rules["post"])
+        cmds[device_group]["post"] = [f"--------- POST-RULEBASE ---------"]
+        cmds[device_group]["post"] += create_set_rule_output(updates, "post")
+
+    #pprint(cmds)
+
+    for device_group, rulebases in cmds.items():
+        with open(f"set-commands-sec_rules-{device_group}.txt", "w") as fin:
+            for prepost in rulebases:
+                if prepost:
+                    for cmd in cmds[device_group][prepost]:
+                        fin.write(f"{cmd}\n")
+
+
 async def run_deduper(
     *,
     configstr: str = None,
@@ -158,6 +304,9 @@ async def run_deduper(
         elif settings.SET_OUTPUT:
             answer = ask_user("Ready to create set commands...continue? (y/n): ")
             if answer in ("yes", "y"):
+                if 'pan' not in locals():
+                    print("Not currently supported via XML.")
+                    sys.exit()
                 await create_set_output(pan=pan, results=results)
 
     print("\n\tDone! Results(duplicate list) also saved in duplicates.json.\n")
@@ -524,7 +673,7 @@ async def object_creation_deletion(
         return set_commands
 
 
-async def set_device_groups(*, config=None, pan: PanoramaApi = None, deep: bool):
+async def set_device_groups(*, config=None, pan: PanoramaApi = None, deep: bool = None):
     """
     Set the device groups that will be searched through
 
@@ -697,7 +846,7 @@ def format_objs(
     return formatted_objs
 
 
-async def get_objects_xml(configstr, deep=None) -> Dict:
+async def get_objects_xml(configstr, obj_type=None, deep=None) -> Dict:
     """
     Get objects from xml file instead of Panorama
 
@@ -756,6 +905,57 @@ async def get_objects_xml(configstr, deep=None) -> Dict:
                 my_objs[object_type][dg] = set([name.get("name") for name in objs])
 
     return my_objs
+
+#
+# def get_sec_rules_xml(configstr: str, object_type: str) -> Set:
+#     """
+#     Get objects from xml file instead of Panorama
+#
+#     Args:
+#         configstr: xml filename
+#         deep: deep search or not
+#     Returns:
+#          Dict/list of objects
+#     Raises:
+#         N/A
+#     """
+#     try:
+#         config = etree.fromstring(configstr)
+#     except XMLSyntaxError as exc:
+#         print(exc)
+#         print("\nInvalid XML File...try again! Our best guess is up there ^^^\n")
+#         sys.exit(1)
+#
+#     try:
+#         config.xpath("./devices/entry[@name='localhost.localdomain']/device-group")
+#     except XPathEvalError as exc:
+#         print(exc)
+#         print(dir(exc))
+#         print("\nInvalid XML File...try again! Our best guess is up there ^^^\n")
+#         sys.exit(1)
+#
+#     # Get device groups and compare/merge with settings.py
+#     #await set_device_groups(config=config, deep=deep)
+#
+#     # Get Security Rules
+#     dg = "All-Devices"
+#     object_xpath = None
+#     if object_type == "pre":
+#         object_xpath = f"./devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/pre-rulebase/security/rules/entry"
+#     if object_type == "post":
+#         object_xpath = f"./devices/entry[@name='localhost.localdomain']/device-group/entry[@name='{dg}']/post-rulebase/security/rules/entry"
+#
+#     # Get object
+#     objs = config.xpath(object_xpath)
+#
+#     if not objs:
+#         print(f"No {object_type} found in {dg}, moving on...")
+#         my_objs = set([])
+#
+#     else:
+#         my_objs = objs
+#
+#     return my_objs
 
 
 def find_duplicates(my_objects):

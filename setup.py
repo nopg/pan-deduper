@@ -1,7 +1,7 @@
 """pan_deduper"""
 import setuptools
 
-__version__ = "0.0.91"
+__version__ = "0.0.95"
 __author__ = "Ryan Gillespie"
 
 setuptools.setup(
@@ -28,5 +28,5 @@ setuptools.setup(
         "Programming Language :: Python :: 3 :: Only",
     ],
     python_requires=">=3.7",
-    entry_points={"console_scripts": ["deduper = pan_deduper.cli:app"]},
+    entry_points={"console_scripts": ["deduper = pan_deduper.cli:app", "secduper = pan_deduper.sec_cli:app"]},
 )

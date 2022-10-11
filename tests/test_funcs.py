@@ -24,6 +24,63 @@ def test_format_objs_full():
     assert isinstance(fmt_objs, list)
 
 
+def test_check_sec_rules():
+    rules = [
+        {
+            "@name": "rule1",
+            "action": "permit",
+            "from": {"member": ["inside"]},
+            "source": {"member": ["1.1.1.1/32"]},
+            "destination": {"member": ["9.9.9.9/32"]},
+            "@loc": "test",
+            "@device-group": "test",
+            "service": {"member": ["test"]},
+            "application": {"member": ["test"]},
+        },
+        {
+            "@name": "rule2",
+            "action": "permit",
+            "from": {"member": ["inside"]},
+            "source": {"member": ["2.2.2.2/32"]},
+            "destination": {"member": ["9.9.9.9/32"]},
+            "@loc": "test",
+            "@device-group": "test",
+            "service": {"member": ["test"]},
+            "application": {"member": ["test"]},
+        },
+        {
+            "@name": "rule3",
+            "action": "permit",
+            "from": {"member": ["inside"]},
+            "source": {"member": ["3.3.3.3/32"]},
+            "destination": {"member": ["9.9.9.9/32"]},
+            "@loc": "test",
+            "@device-group": "test",
+            "service": {"member": ["test"]},
+            "application": {"member": ["test"]},
+        },
+        {
+            "@name": "rule4",
+            "action": "permit",
+            "from": {"member": ["inside"]},
+            "source": {"member": ["4.4.4.4/32"]},
+            "destination": {"member": ["9.9.9.9/32"]},
+            "@loc": "test",
+            "@device-group": "test",
+            "service": {"member": ["test"]},
+            "application": {"member": ["test"]},
+        },
+    ]
+
+    correct_cmds = ["set device-group test pre-rulebase security rules 'rule1' source 2.2.2.2/32", "delete device-group test pre-rulebase security rules 'rule2'", "set device-group test pre-rulebase security rules 'rule1' source 3.3.3.3/32", "delete device-group test pre-rulebase security rules 'rule3'", "set device-group test pre-rulebase security rules 'rule1' source 4.4.4.4/32", "delete device-group test pre-rulebase security rules 'rule4'", '\n']
+    from rich.pretty import pprint
+    updates = utils.check_sec_rules(rules)
+    #pprint(updates)
+    cmds = utils.create_set_rule_output(updates, "pre")
+
+    assert cmds == correct_cmds
+
+
 def test_bunch_commands():
     test_set_commands = {
         "tags": [
@@ -174,4 +231,5 @@ def test_find_object():
 
 
 if __name__ == "__main__":
-    test_bunch_commands()
+    # test_bunch_commands()
+    test_check_sec_rules()
