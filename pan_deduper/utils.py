@@ -185,12 +185,14 @@ async def run_secduper(
     for device_group, rules in my_rules.items():
         cmds[device_group] = {}
         print(f"checking {device_group} Pre")
-        updates = check_sec_rules(rules["pre"])
+        if rules:
+            updates = check_sec_rules(rules["pre"])
         cmds[device_group]["pre"] = [f"--------- PRE-RULEBASE ---------"]
         cmds[device_group]["pre"] += create_set_rule_output(updates, "pre")
 
         print(f"checking {device_group} Post")
-        updates = check_sec_rules(rules["post"])
+        if rules:
+            updates = check_sec_rules(rules["post"])
         cmds[device_group]["post"] = [f"--------- POST-RULEBASE ---------"]
         cmds[device_group]["post"] += create_set_rule_output(updates, "post")
 
