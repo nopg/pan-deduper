@@ -203,6 +203,8 @@ async def run_secduper(
                     for cmd in cmds[device_group][prepost]:
                         fin.write(f"{cmd}\n")
 
+    print("Done! Output of each device group at: set-commands-sec_rules-<groupname>.txt")
+
 
 async def run_deduper(
     *,
