@@ -36,6 +36,7 @@ def test_check_sec_rules():
             "@device-group": "test",
             "service": {"member": ["test"]},
             "application": {"member": ["test"]},
+            "tag": {"member": ["tag1"]},
         },
         {
             "@name": "rule2",
@@ -58,6 +59,8 @@ def test_check_sec_rules():
             "@device-group": "test",
             "service": {"member": ["test"]},
             "application": {"member": ["test"]},
+            "tag": {"member": ["tag1", "tag2", "tag 3"]}
+            # "tag": {"member": ["tag4"]}
         },
         {
             "@name": "rule4",
@@ -69,15 +72,27 @@ def test_check_sec_rules():
             "@device-group": "test",
             "service": {"member": ["test"]},
             "application": {"member": ["test"]},
+            # "tag": {"member": ["tag1", "tag2", "tag 3"]}
+            "tag": {"member": ["tag4"]},
         },
     ]
 
-    correct_cmds = ["set device-group test pre-rulebase security rules 'rule1' source 2.2.2.2/32", "delete device-group test pre-rulebase security rules 'rule2'", "set device-group test pre-rulebase security rules 'rule1' source 3.3.3.3/32", "delete device-group test pre-rulebase security rules 'rule3'", "set device-group test pre-rulebase security rules 'rule1' source 4.4.4.4/32", "delete device-group test pre-rulebase security rules 'rule4'", '\n']
+    correct_cmds = [
+        "set device-group test pre-rulebase security rules 'rule1' tag [ tag2 'tag 3' tag4 ]",
+        "set device-group test pre-rulebase security rules 'rule1' source 2.2.2.2/32",
+        "delete device-group test pre-rulebase security rules 'rule2'",
+        "set device-group test pre-rulebase security rules 'rule1' source 3.3.3.3/32",
+        "delete device-group test pre-rulebase security rules 'rule3'",
+        "set device-group test pre-rulebase security rules 'rule1' source 4.4.4.4/32",
+        "delete device-group test pre-rulebase security rules 'rule4'",
+        "\n",
+    ]
     from rich.pretty import pprint
-    updates = utils.check_sec_rules(rules)
-    #pprint(updates)
-    cmds = utils.create_set_rule_output(updates, "pre")
 
+    updates = utils.check_sec_rules(rules)
+    # pprint(updates)
+    cmds = utils.create_set_rule_output(updates, "pre")
+    # print(cmds)
     assert cmds == correct_cmds
 
 

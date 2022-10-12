@@ -86,12 +86,13 @@ class PanoramaApi:
 
         try:
             response = await self.session[self.apikey].get(
-                url=url, headers=headers, params=params, timeout=30
+                url=url, headers=headers, params=params, timeout=120
             )
             return response.json()
         except httpx.RequestError as e:
             print("Request error: ", e.request)
             logger.error(f"Error getting {url}.")
+            sys.exit()
         except httpx.HTTPStatusError as e:
             print(f"{url=}")
             print("HTTP Status error: ", e)
@@ -123,6 +124,7 @@ class PanoramaApi:
         except httpx.RequestError as e:
             print("Request error: ", e.request)
             logger.error(f"Request Error: {url}.")
+            sys.exit()
         except httpx.HTTPStatusError as e:
             print(f"{url=}")
             print("HTTP Status error: ", e)
@@ -152,6 +154,7 @@ class PanoramaApi:
         except httpx.RequestError as e:
             print("Request error: ", e.request)
             logger.error(f"Request Error: {url}.")
+            sys.exit()
         except httpx.HTTPStatusError as e:
             print(f"{url=}")
             print("HTTP Status error: ", e)
@@ -178,6 +181,7 @@ class PanoramaApi:
         except httpx.RequestError as e:
             print("Request error: ", e.request)
             logger.error(f"Request Error: {url}.")
+            sys.exit()
         except httpx.HTTPStatusError as e:
             print(f"{url=}")
             print("HTTP Status error: ", e)

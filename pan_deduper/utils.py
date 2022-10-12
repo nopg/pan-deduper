@@ -76,8 +76,12 @@ except (FileNotFoundError, ImportError, ModuleNotFoundError):
 
 async def get_sec_rules(pan: PanoramaApi, device_group: str):
     rules = {device_group: {}}
-    rules[device_group]["pre"] = await pan.get_objects(object_type="secrules-pre", device_group=device_group)
-    rules[device_group]["post"] = await pan.get_objects(object_type="secrules-post", device_group=device_group)
+    rules[device_group]["pre"] = await pan.get_objects(
+        object_type="secrules-pre", device_group=device_group
+    )
+    rules[device_group]["post"] = await pan.get_objects(
+        object_type="secrules-post", device_group=device_group
+    )
 
     return rules
 
@@ -85,28 +89,37 @@ async def get_sec_rules(pan: PanoramaApi, device_group: str):
 def check_sec_rules(rules: Dict):
     rule_updates = {}
     for i1, rule1 in enumerate(rules):
-        if rule1['@loc'] != rule1['@device-group']:
+        if rule1["@loc"] != rule1["@device-group"]:
             continue
-        for i2, rule2 in enumerate(rules[i1:]):  # Only check rules BELOW my current rule
+        for i2, rule2 in enumerate(
+            rules[i1:]
+        ):  # Only check rules BELOW my current rule
             name1 = rule1["@name"]
             name2 = rule2["@name"]
-            action1 = rule1['action']
-            action2 = rule2['action']
-            src_zone1 = set(rule1['from']['member'])
-            src_zone2 = set(rule2['from']['member'])
-            destination1 = set(rule1['destination']['member'])
-            destination2 = set(rule2['destination']['member'])
-            service1 = set(rule1['service']['member'])
-            service2 = set(rule2['service']['member'])
-            application1 = set(rule1['application']['member'])
-            application2 = set(rule2['application']['member'])
+            action1 = rule1["action"]
+            action2 = rule2["action"]
+            src_zone1 = set(rule1["from"]["member"])
+            src_zone2 = set(rule2["from"]["member"])
+            destination1 = set(rule1["destination"]["member"])
+            destination2 = set(rule2["destination"]["member"])
+            service1 = set(rule1["service"]["member"])
+            service2 = set(rule2["service"]["member"])
+            application1 = set(rule1["application"]["member"])
+            application2 = set(rule2["application"]["member"])
+
+            new_tags = None
+            if rule1.get("tag"):
+                tags1 = set(rule1["tag"]["member"])
+                if rule2.get("tag"):
+                    tags2 = set(rule2["tag"]["member"])
+                new_tags = list(tags2.difference(tags1))
 
             # Continue if same rule, break if I hit a deny and start on next rule
             if name1 == name2:
                 continue
             if action2 == "deny" and action1 != "deny":
                 break
-            if rule2['@loc'] != rule2['@device-group']:  # If it was inherited
+            if rule2["@loc"] != rule2["@device-group"]:  # If it was inherited
                 continue
 
             if action1 == action2:
@@ -114,10 +127,15 @@ def check_sec_rules(rules: Dict):
                     if service1 == service2:
                         if application1 == application2:
                             if src_zone2 == src_zone1:
-                                if not rule_updates.get(rule1['@name']):
-                                    rule_updates[rule1['@name']] = [rule2]
+                                if not rule_updates.get(rule1["@name"]):
+                                    rule_updates[name1] = {"rules": [rule2]}
                                 else:
-                                    rule_updates[rule1['@name']].append(rule2)
+                                    rule_updates[name1]["rules"].append(rule2)
+                                if new_tags:
+                                    if not rule_updates[name1].get("tags"):
+                                        rule_updates[name1]["tags"] = new_tags
+                                    else:
+                                        rule_updates[name1]["tags"] += new_tags
 
     return rule_updates
 
@@ -130,32 +148,44 @@ def create_set_rule_output(updates, rulebase):
     else:
         prepost = "post-rulebase"
     for rule, additions in updates.items():
+        added_tags = []
+        # Multiple rules may match same first rule and each other, no need to add/delete this rule
         if rule in deleted_rules:
             continue
-        for add in additions:
+        for add in additions["rules"]:
             sets = []
             deletes = []
-            source = add['source']['member']
-            for item in source:
-                if item == 'any':
-                    delete_cmd = (
-                        f"delete device-group {add['@device-group']} {prepost} security rules '{rule}' source"
-                    )
+            source = add["source"]["member"]
+            for new_source in source:
+                # Can't add 'any' to existing list properly without deleting any existing source
+                if new_source == "any":
+                    delete_cmd = f"delete device-group {add['@device-group']} {prepost} security rules '{rule}' source"
                     deletes.append(delete_cmd)
-                set_cmd = (
-                    f"set device-group {add['@device-group']} {prepost} security rules '{rule}' source {item}"
-                )
+                # Move over any extra tags
+                if additions.get("tags"):
+                    new_tags = "[ "
+                    for tag in additions["tags"]:
+                        if tag not in added_tags:
+                            if len(tag.split()) > 1:
+                                new_tags += f"'{tag}' "
+                            else:
+                                new_tags += f"{tag} "
+                            added_tags.append(tag)
+                    new_tags += "]"
+                    if new_tags != "[ ]":
+                        set_cmd = f"set device-group {add['@device-group']} {prepost} security rules '{rule}' tag {new_tags}"
+                        sets.append(str(set_cmd))
+                # Create set command
+                set_cmd = f"set device-group {add['@device-group']} {prepost} security rules '{rule}' source {new_source}"
                 sets.append(set_cmd)
 
             # Now delete the old rule
-            delete_cmd = (
-                f"delete device-group {add['@device-group']} {prepost} security rules '{add['@name']}'"
-            )
+            delete_cmd = f"delete device-group {add['@device-group']} {prepost} security rules '{add['@name']}'"
             deletes.append(delete_cmd)
-            deleted_rules.append(add['@name'])
+            deleted_rules.append(add["@name"])
 
             output += sets + deletes
-        output.append('\n')
+        output.append("\n")
 
     return output
 
@@ -168,6 +198,7 @@ async def run_secduper(
 
     pan = PanoramaApi(panorama=panorama, username=username, password=password)
     await pan.login()
+    print("Login successful")
 
     my_rules = {}
     if not settings.DEVICE_GROUPS:
@@ -176,6 +207,7 @@ async def run_secduper(
     for group in settings.DEVICE_GROUPS:
         coroutines.append(get_sec_rules(pan=pan, device_group=group))
 
+    print("Getting security rules..")
     my_rules_temp = await asyncio.gather(*coroutines)
     my_rules = {}
     for group in my_rules_temp:
@@ -185,18 +217,16 @@ async def run_secduper(
     for device_group, rules in my_rules.items():
         cmds[device_group] = {}
         print(f"checking {device_group} Pre")
-        if rules:
-            updates = check_sec_rules(rules["pre"])
         cmds[device_group]["pre"] = [f"--------- PRE-RULEBASE ---------"]
-        cmds[device_group]["pre"] += create_set_rule_output(updates, "pre")
+        if rules["pre"]:
+            updates = check_sec_rules(rules["pre"])
+            cmds[device_group]["pre"] += create_set_rule_output(updates, "pre")
 
         print(f"checking {device_group} Post")
-        if rules:
-            updates = check_sec_rules(rules["post"])
         cmds[device_group]["post"] = [f"--------- POST-RULEBASE ---------"]
-        cmds[device_group]["post"] += create_set_rule_output(updates, "post")
-
-    #pprint(cmds)
+        if rules["post"]:
+            updates = check_sec_rules(rules["post"])
+            cmds[device_group]["post"] += create_set_rule_output(updates, "post")
 
     for device_group, rulebases in cmds.items():
         with open(f"set-commands-sec_rules-{device_group}.txt", "w") as fin:
@@ -205,7 +235,9 @@ async def run_secduper(
                     for cmd in cmds[device_group][prepost]:
                         fin.write(f"{cmd}\n")
 
-    print("Done! Output of each device group at: set-commands-sec_rules-<groupname>.txt")
+    print(
+        "Done! Output of each device group at: set-commands-sec_rules-<groupname>.txt"
+    )
 
 
 async def run_deduper(
@@ -308,7 +340,7 @@ async def run_deduper(
         elif settings.SET_OUTPUT:
             answer = ask_user("Ready to create set commands...continue? (y/n): ")
             if answer in ("yes", "y"):
-                if 'pan' not in locals():
+                if "pan" not in locals():
                     print("Not currently supported via XML.")
                     sys.exit()
                 await create_set_output(pan=pan, results=results)
@@ -909,6 +941,7 @@ async def get_objects_xml(configstr, obj_type=None, deep=None) -> Dict:
                 my_objs[object_type][dg] = set([name.get("name") for name in objs])
 
     return my_objs
+
 
 #
 # def get_sec_rules_xml(configstr: str, object_type: str) -> Set:

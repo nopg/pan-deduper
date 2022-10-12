@@ -66,7 +66,7 @@ def panorama(
         "-p",
         prompt="Panorama Password: ",
         hide_input=True,
-    )
+    ),
 ) -> None:
     """
     Command Line Entry via Panorama
@@ -78,8 +78,5 @@ def panorama(
     """
     print("\n\tPanorama Time!\n")
     asyncio.run(
-        run_secduper(
-            panorama=panorama_ip, username=username, password=password
-        )
+        run_secduper(panorama=panorama_ip, username=username, password=password)
     )
-

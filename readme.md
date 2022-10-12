@@ -5,6 +5,15 @@ and move duplicates into a (pre-existing) parent device group.
 
 This is for a Palo Alto Panorama deployment.
 
+**Now with 'secduper'!!**
+
+Check for security rules that have the same destination (address/group, service & application). Add the
+source address/groups from these rules to the first found duplicate, move over any extra tags not already
+on the first rule, and delete the extra/duplicate rule. Somewhat still in progress/single use case. No changes
+to Panorama are actually made, it outputs the necessary set commands only. Use DEVICE_GROUPS in settings.py to 
+limit which groups are actually searched, if desired. No other variables in settings.py will have any affect.
+
+
 ## Notes
 Death to 'shared'!! Use your own 'parent' device group instead.
 
