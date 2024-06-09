@@ -68,7 +68,7 @@ To install run:
 
 - `python -m venv myenv` <-- you should always create a virtual environment
 - `source myenv/bin/activate` <-- and activate it
-- `python -m pip install git+https://github.com/glspi/pan-deduper.git`
+- `python -m pip install git+https://github.com/nopg/pan-deduper.git`
 
 A 'settings.py' file is used for 'settings' (shocking huh?)
 just run 'deduper' and it will be automatically created for you. Review the existing
